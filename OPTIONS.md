@@ -357,21 +357,14 @@ play a shutter sound on capture (off by default):
 
 ```sh
 grabit --pin                  # capture a region; pins it to the desktop where it was grabbed
-grabit --grab                 # all pins become interactive (X close button + draggable)
-grabit --release              # pins go back to click-through
 grabit --close-all            # dismiss every pin
+grabit --grab                 # accepted, but pins are interactive on their own now
+grabit --release
 ```
 
-each pin is a long-lived process holding a wlr-layer-shell overlay surface. they stack as you create them, are click-through by default, and ignore other layers' exclusive zones (so the position matches exactly where the region was selected, even with status bars).
+each pin is a long-lived process holding one wlr-layer-shell surface per output, anchored at and sized to the part of the pin on that output. a surface covering the whole output would make the compositor draw its backdrop effects (kwin's blur) behind everything, so a pin used to blur or tint the whole screen. pins stack as you create them and ignore other layers' exclusive zones (so the position matches exactly where the region was selected, even with status bars).
 
-interactive mode is meant to be wired to a hold-bind in your compositor. example for hyprland:
-
-```
-bindrn = SUPER SHIFT, mouse:272, exec, grabit --grab
-bindrn = SUPER SHIFT, mouse:272, release, exec, grabit --release
-```
-
-while grabbed, click anywhere to drag, click the X in the top-right to close that pin.
+a pin takes the pointer over its own area: hover it to reveal the close button in its top-right corner, and drag its body to move it. clicks on a pin are not passed to the windows under it. while a drag is in progress the pin's layer surface grows to cover its monitor and only the image inside it moves: kwin does not repaint what a layer surface occupied before it moved, so a pin dragged by moving the surface itself would smear a trail of itself across the screen. `--grab`/`--release` are no longer needed for that (they are still accepted, so an existing compositor hold-bind keeps working, but they change nothing).
 
 dragging uses plain `wl_pointer` motion, so it works anywhere layer-shell does.
 

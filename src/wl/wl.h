@@ -25,6 +25,7 @@ struct zxdg_output_manager_v1;
 struct zxdg_output_v1;
 struct ext_image_copy_capture_manager_v1;
 struct ext_output_image_capture_source_manager_v1;
+struct zwp_relative_pointer_manager_v1;
 struct wl_compositor;
 
 struct grabit_wl_state;
@@ -66,6 +67,7 @@ struct grabit_wl_state {
 	struct zxdg_output_manager_v1 *xdg_output_manager;
 	struct wp_viewporter *viewporter;
 	struct wp_fractional_scale_manager_v1 *fractional_scale_manager;
+	struct zwp_relative_pointer_manager_v1 *relative_pointer_manager;
 	struct wp_cursor_shape_manager_v1 *cursor_shape_manager;
 	struct ext_image_copy_capture_manager_v1 *ext_copy_manager;
 	struct ext_output_image_capture_source_manager_v1 *ext_source_manager;

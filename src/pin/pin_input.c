@@ -18,18 +18,16 @@
 
 #include <wayland-client.h>
 
+#include "relative-pointer-unstable-v1-client-protocol.h"
+
 void pin_input_apply_region(struct pin_output *o) {
 	struct pin_state *st = o->st;
 	if (!st->wls->compositor || !o->surface) return;
 	struct wl_region *reg = wl_compositor_create_region(st->wls->compositor);
 	if (!reg) return;
 	struct rect want = {0, 0, 0, 0};
-	if (st->input_grabbed || st->clickable) {
-		struct rect pr = pin_rect(st);
-		int32_t ix, iy, iw, ih;
-		if (grabit_output_rect_intersect(o->go, &pr, &ix, &iy, &iw, &ih))
-			want = (struct rect){ix - o->go->x, iy - o->go->y, iw, ih};
-	}
+	if (!st->transient || st->clickable || st->input_grabbed)
+		want = (struct rect){0, 0, o->width, o->height};
 	if (want.x == o->region.x && want.y == o->region.y &&
 		want.w == o->region.w && want.h == o->region.h) {
 		wl_region_destroy(reg);
@@ -54,7 +52,51 @@ static void pin_move_to(struct pin_state *st, int32_t x, int32_t y) {
 	if (x == st->px && y == st->py) return;
 	st->px = x;
 	st->py = y;
-	pin_render_redraw_all(st);
+	pin_sync_outputs(st);
+}
+
+/* Deltas from zwp_relative_pointer_v1: they describe the pointer alone, so the
+   pin can be dragged without any of it leaking back through surface
+   coordinates. Throttled so a 1 kHz mouse does not redraw every event. */
+void pin_drag_apply(struct pin_state *st) {
+	int32_t mx = (int32_t)st->drag_acc_x;
+	int32_t my = (int32_t)st->drag_acc_y;
+	if (mx == 0 && my == 0) return;
+	uint64_t now = grabit_now_ns();
+	if (st->drag_last_ns && now - st->drag_last_ns < 8000000ULL) return;
+	st->drag_last_ns = now;
+	st->drag_acc_x -= mx;
+	st->drag_acc_y -= my;
+	pin_move_to(st, st->px + mx, st->py + my);
+}
+
+static void relative_motion(void *data, struct zwp_relative_pointer_v1 *rp,
+							uint32_t utime_hi, uint32_t utime_lo, wl_fixed_t dx,
+							wl_fixed_t dy, wl_fixed_t dx_unaccel,
+							wl_fixed_t dy_unaccel) {
+	(void)rp;
+	(void)utime_hi;
+	(void)utime_lo;
+	(void)dx_unaccel;
+	(void)dy_unaccel;
+	struct pin_state *st = data;
+	if (!st->dragging) return;
+	st->drag_acc_x += wl_fixed_to_double(dx);
+	st->drag_acc_y += wl_fixed_to_double(dy);
+	pin_drag_apply(st);
+}
+
+static const struct zwp_relative_pointer_v1_listener relative_pointer_listener_g = {
+	.relative_motion = relative_motion,
+};
+
+static void pin_relative_pointer_init(struct pin_state *st) {
+	if (!st->pointer || !st->wls->relative_pointer_manager) return;
+	st->rel_pointer = zwp_relative_pointer_manager_v1_get_relative_pointer(
+		st->wls->relative_pointer_manager, st->pointer);
+	if (!st->rel_pointer) return;
+	zwp_relative_pointer_v1_add_listener(st->rel_pointer,
+										 &relative_pointer_listener_g, st);
 }
 
 static struct pin_output *output_for_surface(struct pin_state *st,
@@ -76,8 +118,8 @@ static bool enter_output(struct pin_state *st, struct wl_surface *surface,
 	struct pin_output *o = output_for_surface(st, surface);
 	if (!o) return false;
 	st->ptr_on = o;
-	st->cx = o->go->x + wl_fixed_to_int(sx);
-	st->cy = o->go->y + wl_fixed_to_int(sy);
+	st->cx = o->vis.x + wl_fixed_to_int(sx);
+	st->cy = o->vis.y + wl_fixed_to_int(sy);
 	return true;
 }
 
@@ -91,6 +133,10 @@ static void pointer_enter(void *data, struct wl_pointer *p, uint32_t serial,
 		st->hover_active = true;
 		pin_render_redraw_all(st);
 	}
+	if (!st->hovering) {
+		st->hovering = true;
+		pin_render_redraw_all(st);
+	}
 	pin_dismiss_rearm(st);
 	pin_cursor_refresh(st);
 }
@@ -102,6 +148,10 @@ static void pointer_leave(void *data, struct wl_pointer *p, uint32_t serial,
 	struct pin_state *st = data;
 	if (st->ptr_on && st->ptr_on->surface != surface) return;
 	st->ptr_on = NULL;
+	if (st->hovering) {
+		st->hovering = false;
+		pin_render_redraw_all(st);
+	}
 	if (st->hover_caption && st->hover_active) {
 		st->hover_active = false;
 		pin_render_redraw_all(st);
@@ -111,15 +161,21 @@ static void pointer_leave(void *data, struct wl_pointer *p, uint32_t serial,
 
 static void motion_event(struct pin_state *st, wl_fixed_t sx, wl_fixed_t sy) {
 	if (!st->ptr_on) return;
-	st->cx = st->ptr_on->go->x + wl_fixed_to_int(sx);
-	st->cy = st->ptr_on->go->y + wl_fixed_to_int(sy);
-	if (st->dragging)
-		pin_move_to(st, st->cx - st->grab_dx, st->cy - st->grab_dy);
+	st->cx = st->ptr_on->vis.x + wl_fixed_to_int(sx);
+	st->cy = st->ptr_on->vis.y + wl_fixed_to_int(sy);
 	pin_cursor_update(st);
 }
 
 static void release_event(struct pin_state *st) {
+	if (st->dragging) {
+		st->drag_last_ns = 0;
+		pin_drag_apply(st);
+	}
 	st->dragging = false;
+	if (st->drag_full) {
+		st->drag_full = false;
+		pin_sync_outputs(st);
+	}
 	pin_cursor_update(st);
 }
 
@@ -140,15 +196,21 @@ static void press_event(struct pin_state *st) {
 		st->finished = true;
 		return;
 	}
-	if (!st->input_grabbed) return;
 	if (pin_in_close_button(st)) {
 		st->finished = true;
 		return;
 	}
+	if (st->transient && !st->input_grabbed) return;
 
 	st->dragging = true;
 	st->grab_dx = st->cx - st->px;
 	st->grab_dy = st->cy - st->py;
+	st->drag_acc_x = 0;
+	st->drag_acc_y = 0;
+	st->drag_last_ns = 0;
+	/* grow first, then only the image moves for the rest of the drag */
+	st->drag_full = true;
+	pin_sync_outputs(st);
 	pin_cursor_update(st);
 }
 
@@ -277,5 +339,6 @@ void pin_input_attach(struct pin_state *st) {
 	if (has_pointer) st->pointer = wl_seat_get_pointer(st->wls->seat);
 	if (has_touch) st->touch = wl_seat_get_touch(st->wls->seat);
 	if (st->pointer) wl_pointer_add_listener(st->pointer, &pointer_listener_g, st);
+	pin_relative_pointer_init(st);
 	if (st->touch) wl_touch_add_listener(st->touch, &touch_listener_g, st);
 }

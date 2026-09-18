@@ -124,13 +124,21 @@ key or a launcher entry; the package ships
 for exactly that.
 .TP
 .B \-\-pin
-Capture a region and pin it to the desktop as a click-through overlay. Pins
-stack and persist as long-lived processes.
+Capture a region and pin it to the desktop. Each pin holds one layer surface per
+output, sized to the part of the pin on that output (a drag grows it to the whole
+output and moves only the image inside it, because kwin leaves the pixels a
+moved layer surface occupied behind), so compositor backdrop
+effects such as kwin's blur stay behind the pin instead of tinting the whole
+screen. A pin takes the pointer over its own area: hover it for the close button
+in its top-right corner, drag its body to move it. Pins stack and persist as
+long-lived processes.
 .TP
 .BR \-\-grab ", " \-\-release ", " \-\-close\-all
-Make existing pins interactive (clickable close button + draggable), restore
-them to click-through, or dismiss every pin. Intended to be wired to a
-compositor hold-bind.
+Dismiss every pin. Pins are interactive on their own, so
+.B \-\-grab
+and
+.B \-\-release
+are no-ops kept for existing compositor hold-binds.
 .TP
 .B \-\-tray
 Toggle a persistent tray icon that runs as a background process. Left click

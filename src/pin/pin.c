@@ -26,6 +26,8 @@
 #include <cairo/cairo.h>
 #include <wayland-client.h>
 
+#include "relative-pointer-unstable-v1-client-protocol.h"
+
 static volatile sig_atomic_t g_term = 0;
 static void on_term(int sig) {
 	(void)sig;
@@ -253,6 +255,7 @@ out:
 	pin_ipc_close(&st);
 	pin_cursor_destroy(&st);
 	pin_outputs_finish(&st);
+	if (st.rel_pointer) zwp_relative_pointer_v1_destroy(st.rel_pointer);
 	if (st.pointer) wl_pointer_release(st.pointer);
 	if (st.touch) wl_touch_release(st.touch);
 	wl_display_roundtrip(wls.display);

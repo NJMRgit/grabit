@@ -24,6 +24,7 @@ struct wl_cursor_theme;
 struct wp_cursor_shape_device_v1;
 struct wp_fractional_scale_v1;
 struct wp_viewport;
+struct zwp_relative_pointer_v1;
 struct pin_state;
 
 struct pin_output {
@@ -37,6 +38,7 @@ struct pin_output {
 	struct rect slot_shown[GRABIT_SHM_SLOTS];
 	struct rect shown;
 	struct rect region;
+	struct rect vis;
 	int32_t width;
 	int32_t height;
 	int32_t scale;
@@ -71,6 +73,7 @@ struct pin_state {
 
 	bool input_grabbed;
 	bool clickable;
+	bool hovering;
 	bool finished;
 
 	struct pin_output *ptr_on;
@@ -79,6 +82,25 @@ struct pin_state {
 	bool dragging;
 	int32_t grab_dx;
 	int32_t grab_dy;
+	/*
+	 * Dragging must not read the pointer's surface coordinates: the surface
+	 * moves with the pin, so the compositor keeps re-reporting the pointer in
+	 * a frame that the pin itself just shifted, and that displacement feeds
+	 * back into the position. zwp_relative_pointer_v1 reports the motion on
+	 * its own, so the deltas stay correct no matter where the pin goes.
+	 */
+	/*
+	 * True while a drag is in progress: the surfaces then cover their whole
+	 * output and only the drawn image moves. Moving a layer surface instead
+	 * makes the compositor leave the old pixels on screen (kwin does not
+	 * repaint what a layer surface occupied before it moved), so a dragged pin
+	 * would smear a trail of itself and of the backdrop effects behind it.
+	 */
+	bool drag_full;
+	struct zwp_relative_pointer_v1 *rel_pointer;
+	double drag_acc_x;
+	double drag_acc_y;
+	uint64_t drag_last_ns;
 
 	struct wp_cursor_shape_device_v1 *cursor_shape;
 	struct wl_cursor_theme *cursor_theme;
@@ -138,6 +160,7 @@ void pin_outputs_finish(struct pin_state *st);
 
 void pin_input_attach(struct pin_state *st);
 void pin_input_apply_region(struct pin_output *o);
+void pin_drag_apply(struct pin_state *st);
 void pin_cursor_load(struct pin_state *st);
 void pin_cursor_destroy(struct pin_state *st);
 void pin_cursor_update(struct pin_state *st);

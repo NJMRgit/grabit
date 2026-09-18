@@ -54,6 +54,7 @@ WL_PROTOCOLS := \
 	viewporter \
 	fractional-scale-v1 \
 	cursor-shape-v1 \
+	relative-pointer-unstable-v1 \
 	tablet-unstable-v2 \
 	wlr-screencopy-unstable-v1 \
 	wlr-data-control-unstable-v1 \

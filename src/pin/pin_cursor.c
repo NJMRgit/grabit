@@ -85,7 +85,7 @@ void pin_cursor_update(struct pin_state *st) {
 	int kind = PIN_CUR_NONE;
 	if (st->clickable) {
 		kind = PIN_CUR_HAND;
-	} else if (st->input_grabbed) {
+	} else if (!st->transient || st->input_grabbed) {
 		if (st->dragging)
 			kind = PIN_CUR_GRABBING;
 		else if (pin_in_close_button(st))

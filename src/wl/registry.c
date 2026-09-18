@@ -19,6 +19,7 @@
 #include "ext-image-capture-source-v1-client-protocol.h"
 #include "ext-image-copy-capture-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
+#include "relative-pointer-unstable-v1-client-protocol.h"
 #include "viewporter-client-protocol.h"
 #include "wlr-data-control-unstable-v1-client-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-client-protocol.h"
@@ -165,6 +166,14 @@ static void registry_global(void *data, struct wl_registry *reg, uint32_t name,
 		uint32_t v = version > 1 ? 1 : version;
 		s->fractional_scale_manager = wl_registry_bind(
 			reg, name, &wp_fractional_scale_manager_v1_interface, v);
+		return;
+	}
+
+	if (strcmp(interface,
+			   zwp_relative_pointer_manager_v1_interface.name) == 0) {
+		uint32_t v = version > 1 ? 1 : version;
+		s->relative_pointer_manager = wl_registry_bind(
+			reg, name, &zwp_relative_pointer_manager_v1_interface, v);
 		return;
 	}
 

@@ -119,10 +119,12 @@ static const struct wl_callback_listener frame_listener_g = {
 static void pin_apply_opaque_region(struct pin_output *o) {
 	struct pin_state *st = o->st;
 	if (st->transient || !st->wls->compositor || !o->surface) return;
-	if (o->width <= 0 || o->height <= 0) return;
+	/* only the image is opaque; the rest of the output-wide surface is empty */
+	struct rect pr = pin_rect(st);
+	if (pr.w <= 0 || pr.h <= 0) return;
 	struct wl_region *reg = wl_compositor_create_region(st->wls->compositor);
 	if (!reg) return;
-	wl_region_add(reg, 0, 0, o->width, o->height);
+	wl_region_add(reg, pr.x - o->vis.x, pr.y - o->vis.y, pr.w, pr.h);
 	wl_surface_set_opaque_region(o->surface, reg);
 	wl_region_destroy(reg);
 }

@@ -125,9 +125,12 @@ for exactly that.
 .TP
 .B \-\-pin
 Capture a region and pin it to the desktop. Each pin holds one layer surface per
-output, sized to the part of the pin on that output (a drag grows it to the whole
-output and moves only the image inside it, because kwin leaves the pixels a
-moved layer surface occupied behind), so compositor backdrop
+output covering that whole output, with the image drawn at the pin's place inside
+it: a drag moves only the image, because kwin leaves the pixels a moved layer
+surface occupied behind and animates the geometry change. A pin reports the
+window class
+.BR grabit ,
+so a blur or glass effect that blurs every window should exclude that class, so compositor backdrop
 effects such as kwin's blur stay behind the pin instead of tinting the whole
 screen. A pin takes the pointer over its own area: hover it for the close button
 in its top-right corner, drag its body to move it. Pins stack and persist as

@@ -90,13 +90,12 @@ struct pin_state {
 	 * its own, so the deltas stay correct no matter where the pin goes.
 	 */
 	/*
-	 * True while a drag is in progress: the surfaces then cover their whole
-	 * output and only the drawn image moves. Moving a layer surface instead
-	 * makes the compositor leave the old pixels on screen (kwin does not
-	 * repaint what a layer surface occupied before it moved), so a dragged pin
-	 * would smear a trail of itself and of the backdrop effects behind it.
+	 * A pin's surfaces cover their whole output and a drag only moves the image
+	 * inside them. Moving a layer surface instead makes the compositor leave
+	 * the old pixels on screen (kwin does not repaint what a layer surface
+	 * occupied before it moved) and animate the geometry change, so a dragged
+	 * pin smeared a trail and flashed over the screen.
 	 */
-	bool drag_full;
 	struct zwp_relative_pointer_v1 *rel_pointer;
 	double drag_acc_x;
 	double drag_acc_y;

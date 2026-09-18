@@ -30,14 +30,13 @@ static void pin_output_destroy(struct pin_output *o) {
 	free(o);
 }
 
+/* The pin's surface always covers its output: the image is drawn at the pin's
+   place inside it, and a drag only moves that image (see pin_state.h). */
 static bool pin_overlap(const struct pin_state *st, const struct grabit_output *go,
 						struct rect *out) {
-	if (st->drag_full) {
-		*out = (struct rect){go->x, go->y, go->logical_width, go->logical_height};
-		return out->w > 0 && out->h > 0;
-	}
-	struct rect pr = pin_rect(st);
-	return grabit_output_rect_intersect(go, &pr, &out->x, &out->y, &out->w, &out->h);
+	(void)st;
+	*out = (struct rect){go->x, go->y, go->logical_width, go->logical_height};
+	return out->w > 0 && out->h > 0;
 }
 
 static void pin_output_place(struct pin_output *o, struct rect vis) {

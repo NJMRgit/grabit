@@ -26,8 +26,11 @@ void pin_input_apply_region(struct pin_output *o) {
 	struct wl_region *reg = wl_compositor_create_region(st->wls->compositor);
 	if (!reg) return;
 	struct rect want = {0, 0, 0, 0};
-	if (!st->transient || st->clickable || st->input_grabbed)
-		want = (struct rect){0, 0, o->width, o->height};
+	if (!st->transient || st->clickable || st->input_grabbed) {
+		/* the surface covers the output; only the pin itself takes the pointer */
+		struct rect pr = pin_rect(st);
+		want = (struct rect){pr.x - o->vis.x, pr.y - o->vis.y, pr.w, pr.h};
+	}
 	if (want.x == o->region.x && want.y == o->region.y &&
 		want.w == o->region.w && want.h == o->region.h) {
 		wl_region_destroy(reg);
@@ -172,10 +175,6 @@ static void release_event(struct pin_state *st) {
 		pin_drag_apply(st);
 	}
 	st->dragging = false;
-	if (st->drag_full) {
-		st->drag_full = false;
-		pin_sync_outputs(st);
-	}
 	pin_cursor_update(st);
 }
 
@@ -208,9 +207,6 @@ static void press_event(struct pin_state *st) {
 	st->drag_acc_x = 0;
 	st->drag_acc_y = 0;
 	st->drag_last_ns = 0;
-	/* grow first, then only the image moves for the rest of the drag */
-	st->drag_full = true;
-	pin_sync_outputs(st);
 	pin_cursor_update(st);
 }
 

@@ -45,7 +45,6 @@ struct ctl_output {
 	struct wl_surface *surface;
 	struct zwlr_layer_surface_v1 *layer;
 	struct grabit_shm_pool pool;
-	struct rect slot_shown[GRABIT_SHM_SLOTS];
 	int32_t width;
 	int32_t height;
 	int32_t pixel_w;
@@ -54,14 +53,13 @@ struct ctl_output {
 	bool configured;
 	bool mapped;
 	bool dirty;
-	struct rect shown;
 	struct wl_callback *frame_cb;
 };
 
 struct rec_controls {
 	struct grabit_wl_state *wls;
-	struct ctl_output *outs;
-	size_t n;
+	struct ctl_output out;
+	bool have_out;
 
 	int32_t bx;
 	int32_t by;
@@ -77,7 +75,6 @@ struct rec_controls {
 	struct wl_pointer *pointer;
 	struct wl_touch *touch;
 	struct gtouch_slot touch_slot;
-	struct ctl_output *ptr_on;
 	int32_t cx;
 	int32_t cy;
 

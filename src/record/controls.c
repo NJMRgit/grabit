@@ -24,11 +24,8 @@ void ctl_apply_input_region(struct ctl_output *o) {
 	struct rec_controls *c = o->st;
 	struct wl_region *reg = wl_compositor_create_region(c->wls->compositor);
 	if (!reg) return;
-	struct rect b = ctl_bar_rect(c);
-	int32_t ix, iy, iw, ih;
-	if (grabit_output_rect_intersect(o->go, &b, &ix, &iy, &iw, &ih))
-		grabit_wl_region_add_rounded(reg, ix - o->go->x, iy - o->go->y, iw, ih,
-									 (int32_t)grabit_ui_radius(GUI_R_PANEL));
+	grabit_wl_region_add_rounded(reg, 0, 0, c->bw, c->bh,
+								 (int32_t)grabit_ui_radius(GUI_R_PANEL));
 	wl_surface_set_input_region(o->surface, reg);
 	wl_region_destroy(reg);
 }
@@ -46,9 +43,6 @@ static void layer_configure(void *data, struct zwlr_layer_surface_v1 *ls,
 	wl_surface_set_buffer_scale(o->surface, o->scale);
 	o->configured = true;
 	o->mapped = false;
-	o->shown = (struct rect){0, 0, 0, 0};
-	for (size_t i = 0; i < GRABIT_SHM_SLOTS; i++)
-		o->slot_shown[i] = (struct rect){0, 0, 0, 0};
 	ctl_apply_input_region(o);
 	ctl_output_redraw(o);
 }
@@ -122,20 +116,33 @@ static bool try_place_near_region(const struct grabit_output *o, struct rect r,
 }
 
 static bool place_bar(struct grabit_wl_state *s, struct rect r,
-					  int32_t w, int32_t h, int32_t *bx, int32_t *by) {
+					  int32_t w, int32_t h, int32_t *bx, int32_t *by,
+					  struct grabit_output **out_go) {
 	const struct grabit_output *cur = grabit_wm_active_output(s);
 	if (!cur) cur = grabit_wl_output_at(s, r.x + r.w / 2, r.y + r.h / 2);
 	if (!cur) cur = grabit_wl_primary_output(s);
 	if (!cur) return false;
 
-	if (try_place_near_region(cur, r, w, h, bx, by)) return true;
-	if (try_output(cur, r, w, h, bx, by)) return true;
+	if (try_place_near_region(cur, r, w, h, bx, by)) {
+		*out_go = (struct grabit_output *)cur;
+		return true;
+	}
+	if (try_output(cur, r, w, h, bx, by)) {
+		*out_go = (struct grabit_output *)cur;
+		return true;
+	}
 
 	for (size_t i = 0; i < s->n_outputs; i++) {
 		const struct grabit_output *o = s->outputs[i];
 		if (o == cur) continue;
-		if (try_place_near_region(o, r, w, h, bx, by)) return true;
-		if (try_output(o, r, w, h, bx, by)) return true;
+		if (try_place_near_region(o, r, w, h, bx, by)) {
+			*out_go = (struct grabit_output *)o;
+			return true;
+		}
+		if (try_output(o, r, w, h, bx, by)) {
+			*out_go = (struct grabit_output *)o;
+			return true;
+		}
 	}
 	return false;
 }
@@ -148,7 +155,8 @@ struct rec_controls *controls_start(struct grabit_wl_state *s, struct rect r,
 
 	int32_t w = ctl_bar_width(), h = CB_H;
 	int32_t bx = 0, by = 0;
-	if (!place_bar(s, r, w, h, &bx, &by)) {
+	struct grabit_output *go = NULL;
+	if (!place_bar(s, r, w, h, &bx, &by, &go) || !go) {
 		log_info("recording: no room for the control bar outside the region; "
 				 "re-run `grabit --record` to stop");
 		return NULL;
@@ -165,26 +173,26 @@ struct rec_controls *controls_start(struct grabit_wl_state *s, struct rect r,
 	c->pause_flag = pause_flag;
 	c->abort_flag = abort_flag;
 
-	c->outs = calloc(s->n_outputs, sizeof *c->outs);
-	if (!c->outs) {
+	struct ctl_output *o = &c->out;
+	o->st = c;
+	o->go = go;
+	o->surface = wl_compositor_create_surface(s->compositor);
+	if (!o->surface) {
 		free(c);
 		return NULL;
 	}
-	c->n = s->n_outputs;
-
-	for (size_t i = 0; i < c->n; i++) {
-		struct ctl_output *o = &c->outs[i];
-		o->st = c;
-		o->go = s->outputs[i];
-		o->surface = wl_compositor_create_surface(s->compositor);
-		o->layer = grabit_wl_layer_fullscreen(
-			s, o->surface, o->go->wl_output, "grabit-rec-controls",
-			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE,
-			&layer_listener_g, o);
-		if (!o->layer) continue;
-		ctl_apply_input_region(o);
-		wl_surface_commit(o->surface);
+	o->layer = grabit_wl_layer_anchored(
+		s, o->surface, go->wl_output, "grabit-rec-controls",
+		ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT, w, h,
+		by - go->y, 0, 0, bx - go->x,
+		ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE, &layer_listener_g, o);
+	if (!o->layer) {
+		wl_surface_destroy(o->surface);
+		free(c);
+		return NULL;
 	}
+	c->have_out = true;
+	wl_surface_commit(o->surface);
 
 	bool has_pointer = s->seat_caps & WL_SEAT_CAPABILITY_POINTER;
 	bool has_touch = s->seat_caps & WL_SEAT_CAPABILITY_TOUCH;
@@ -236,14 +244,11 @@ void controls_stop(struct rec_controls *c) {
 	if (c->cursor_shape) wp_cursor_shape_device_v1_destroy(c->cursor_shape);
 	if (c->cursor_surface) wl_surface_destroy(c->cursor_surface);
 	if (c->cursor_theme) wl_cursor_theme_destroy(c->cursor_theme);
-	for (size_t i = 0; i < c->n; i++) {
-		struct ctl_output *o = &c->outs[i];
-		grabit_wl_callback_drop(&o->frame_cb);
-		grabit_shm_pool_finish(&o->pool);
-		if (o->layer) zwlr_layer_surface_v1_destroy(o->layer);
-		if (o->surface) wl_surface_destroy(o->surface);
-	}
-	free(c->outs);
+	struct ctl_output *o = &c->out;
+	grabit_wl_callback_drop(&o->frame_cb);
+	grabit_shm_pool_finish(&o->pool);
+	if (o->layer) zwlr_layer_surface_v1_destroy(o->layer);
+	if (o->surface) wl_surface_destroy(o->surface);
 	if (c->wls && c->wls->display) wl_display_roundtrip(c->wls->display);
 	free(c);
 }

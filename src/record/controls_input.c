@@ -22,21 +22,11 @@ static int btn_at(int32_t x, int32_t y) {
 	return -1;
 }
 
-static struct ctl_output *find_by_surface(struct rec_controls *c,
-										  struct wl_surface *s) {
-	for (size_t i = 0; i < c->n; i++) {
-		if (c->outs[i].surface == s) return &c->outs[i];
-	}
-	return NULL;
-}
-
 static bool enter_output(struct rec_controls *c, struct wl_surface *surface,
 						 wl_fixed_t sx, wl_fixed_t sy) {
-	struct ctl_output *o = find_by_surface(c, surface);
-	if (!o) return false;
-	c->ptr_on = o;
-	c->cx = o->go->x + wl_fixed_to_int(sx);
-	c->cy = o->go->y + wl_fixed_to_int(sy);
+	if (!c->have_out || c->out.surface != surface) return false;
+	c->cx = wl_fixed_to_int(sx);
+	c->cy = wl_fixed_to_int(sy);
 	return true;
 }
 
@@ -49,21 +39,20 @@ static void pointer_enter(void *data, struct wl_pointer *p, uint32_t serial,
 											WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER);
 	else
 		grabit_cursor_apply(p, serial, c->cursor_surface, c->cursor_hand,
-							c->ptr_on->scale);
+							c->out.scale > 0 ? c->out.scale : 1);
 }
 
 static void pointer_leave(void *data, struct wl_pointer *p, uint32_t serial,
 						  struct wl_surface *surface) {
+	(void)data;
 	(void)p;
 	(void)serial;
-	struct rec_controls *c = data;
-	if (c->ptr_on && c->ptr_on->surface == surface) c->ptr_on = NULL;
+	(void)surface;
 }
 
 static void motion_event(struct rec_controls *c, wl_fixed_t sx, wl_fixed_t sy) {
-	if (!c->ptr_on) return;
-	c->cx = c->ptr_on->go->x + wl_fixed_to_int(sx);
-	c->cy = c->ptr_on->go->y + wl_fixed_to_int(sy);
+	c->cx = wl_fixed_to_int(sx);
+	c->cy = wl_fixed_to_int(sy);
 }
 
 static void pointer_motion(void *data, struct wl_pointer *p, uint32_t time,
@@ -74,7 +63,7 @@ static void pointer_motion(void *data, struct wl_pointer *p, uint32_t time,
 }
 
 static void press_event(struct rec_controls *c) {
-	if (!c->ptr_on || !rect_contains(ctl_bar_rect(c), c->cx, c->cy)) return;
+	if (!rect_contains(ctl_bar_rect(c), c->cx, c->cy)) return;
 	switch (btn_at(c->cx - c->bx, c->cy - c->by)) {
 	case CB_BTN_START:
 		atomic_store(c->pause_flag, 0);

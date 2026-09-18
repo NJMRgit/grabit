@@ -196,6 +196,25 @@ struct zwlr_layer_surface_v1 *grabit_wl_layer_fullscreen(
 	return ls;
 }
 
+struct zwlr_layer_surface_v1 *grabit_wl_layer_anchored(
+	struct grabit_wl_state *s, struct wl_surface *surface, struct wl_output *output,
+	const char *ns, uint32_t anchor, int32_t w, int32_t h, int32_t margin_top,
+	int32_t margin_right, int32_t margin_bottom, int32_t margin_left,
+	uint32_t kb_interactivity,
+	const struct zwlr_layer_surface_v1_listener *listener, void *data) {
+	struct zwlr_layer_surface_v1 *ls = zwlr_layer_shell_v1_get_layer_surface(
+		s->layer_shell, surface, output, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, ns);
+	if (!ls) return NULL;
+	if (listener) zwlr_layer_surface_v1_add_listener(ls, listener, data);
+	zwlr_layer_surface_v1_set_anchor(ls, anchor);
+	zwlr_layer_surface_v1_set_size(ls, (uint32_t)w, (uint32_t)h);
+	zwlr_layer_surface_v1_set_exclusive_zone(ls, 0);
+	zwlr_layer_surface_v1_set_margin(ls, margin_top, margin_right, margin_bottom,
+									 margin_left);
+	zwlr_layer_surface_v1_set_keyboard_interactivity(ls, kb_interactivity);
+	return ls;
+}
+
 int grabit_wl_pump(struct grabit_wl_state *s, int timeout_ms) {
 	while (wl_display_prepare_read(s->display) != 0) {
 		if (wl_display_dispatch_pending(s->display) < 0) return -1;

@@ -143,63 +143,38 @@ void ctl_output_redraw(struct ctl_output *o) {
 	struct rec_controls *c = o->st;
 	o->dirty = false;
 
-	struct rect cur = {0, 0, 0, 0};
-	struct rect b = ctl_bar_rect(c);
-	int32_t ix, iy, iw, ih;
-	if (grabit_output_rect_intersect(o->go, &b, &ix, &iy, &iw, &ih)) {
-		cur = (struct rect){(ix - o->go->x) * o->scale,
-							(iy - o->go->y) * o->scale,
-							iw * o->scale, ih * o->scale};
-	}
-	if (cur.w == 0 && o->shown.w == 0 && o->mapped) return;
-
 	struct grabit_shm_slot *slot = grabit_shm_pool_next(
 		c->wls->shm, "grabit-rec-controls", &o->pool, o->pixel_w, o->pixel_h);
 	if (!slot) {
 		o->dirty = true;
 		return;
 	}
-	struct rect *sshown = &o->slot_shown[slot - o->pool.slots];
 
-	if (cur.w > 0 || sshown->w > 0) {
-		cairo_surface_t *surf = grabit_cairo_image_argb(slot->buf.map, o->pixel_w,
-														o->pixel_h, o->pixel_w * 4);
-		if (!surf) return;
-		cairo_t *cr = cairo_create(surf);
-		cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
-		if (sshown->w > 0) {
-			cairo_rectangle(cr, sshown->x, sshown->y, sshown->w, sshown->h);
-			cairo_fill(cr);
-		}
-		if (cur.w > 0) {
-			cairo_rectangle(cr, cur.x, cur.y, cur.w, cur.h);
-			cairo_fill(cr);
-			cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-			cairo_scale(cr, o->scale, o->scale);
-			cairo_translate(cr, c->bx - o->go->x, c->by - o->go->y);
-			draw_bar(cr, c);
-		}
-		cairo_destroy(cr);
-		cairo_surface_flush(surf);
-		cairo_surface_destroy(surf);
+	cairo_surface_t *surf =
+		grabit_cairo_image_argb(slot->buf.map, o->pixel_w, o->pixel_h, o->pixel_w * 4);
+	if (!surf) {
+		o->dirty = true;
+		return;
 	}
+	cairo_t *cr = cairo_create(surf);
+	cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+	cairo_paint(cr);
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+	cairo_scale(cr, o->scale, o->scale);
+	draw_bar(cr, c);
+	cairo_destroy(cr);
+	cairo_surface_flush(surf);
+	cairo_surface_destroy(surf);
 
 	o->frame_cb = wl_surface_frame(o->surface);
 	wl_callback_add_listener(o->frame_cb, &frame_listener_g, o);
 	grabit_shm_slot_attach(o->surface, slot);
-	if (o->shown.w > 0)
-		wl_surface_damage_buffer(o->surface, o->shown.x, o->shown.y,
-								 o->shown.w, o->shown.h);
-	if (cur.w > 0)
-		wl_surface_damage_buffer(o->surface, cur.x, cur.y, cur.w, cur.h);
+	wl_surface_damage_buffer(o->surface, 0, 0, o->pixel_w, o->pixel_h);
 	wl_surface_commit(o->surface);
 	wl_display_flush(c->wls->display);
-	*sshown = cur;
-	o->shown = cur;
 	o->mapped = true;
 }
 
 void ctl_redraw_all(struct rec_controls *c) {
-	for (size_t i = 0; i < c->n; i++)
-		output_request_redraw(&c->outs[i]);
+	if (c->have_out) output_request_redraw(&c->out);
 }

@@ -93,6 +93,13 @@ struct zwlr_layer_surface_v1 *grabit_wl_layer_fullscreen(
 	struct wl_output *output, const char *ns, uint32_t kb_interactivity,
 	const struct zwlr_layer_surface_v1_listener *listener, void *data);
 
+struct zwlr_layer_surface_v1 *grabit_wl_layer_anchored(
+	struct grabit_wl_state *s, struct wl_surface *surface, struct wl_output *output,
+	const char *ns, uint32_t anchor, int32_t w, int32_t h, int32_t margin_top,
+	int32_t margin_right, int32_t margin_bottom, int32_t margin_left,
+	uint32_t kb_interactivity,
+	const struct zwlr_layer_surface_v1_listener *listener, void *data);
+
 struct grabit_output *grabit_wl_primary_output(struct grabit_wl_state *s);
 struct grabit_output *grabit_wl_output_at(struct grabit_wl_state *s, int32_t x, int32_t y);
 struct grabit_output *grabit_wl_output_by_name(struct grabit_wl_state *s, const char *name);

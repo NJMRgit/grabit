@@ -20,6 +20,13 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
 #define BORDER_LOGICAL 1
+/* the layer surface must stay small: the compositor draws its backdrop effects
+   behind a translucent layer surface, so a surface covering the whole region (or
+   the whole output) would blur or tint everything under it. the border is drawn
+   as four thin strips plus, optionally, a small pill for the dimensions. */
+#define STRIP 4
+#define PILL_W 92
+#define PILL_H 26
 
 struct overlay_output {
 	struct overlay_state *st;
@@ -32,6 +39,8 @@ struct overlay_output {
 	int32_t pixel_width;
 	int32_t pixel_height;
 	int32_t scale;
+	int32_t ox;
+	int32_t oy;
 	bool configured;
 };
 
@@ -69,8 +78,8 @@ static void draw_border(struct overlay_output *o) {
 	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
 	const double S = (double)o->scale;
-	double rx = (o->st->r.x - o->go->x) * S;
-	double ry = (o->st->r.y - o->go->y) * S;
+	double rx = (o->st->r.x - o->ox) * S;
+	double ry = (o->st->r.y - o->oy) * S;
 	double rw = o->st->r.w * S;
 	double rh = o->st->r.h * S;
 	double bw = BORDER_LOGICAL * S;
@@ -142,42 +151,94 @@ static const struct zwlr_layer_surface_v1_listener layer_listener_g = {
 	.closed = layer_surface_closed,
 };
 
+static struct rect patch_rect(const struct rect *r, int which) {
+	switch (which) {
+	case 0: /* top edge */
+		return (struct rect){r->x - STRIP, r->y - STRIP, r->w + STRIP * 2, STRIP * 2};
+	case 1: /* bottom edge */
+		return (struct rect){r->x - STRIP, r->y + r->h - STRIP, r->w + STRIP * 2,
+							 STRIP * 2};
+	case 2: /* left edge */
+		return (struct rect){r->x - STRIP, r->y - STRIP, STRIP * 2, r->h + STRIP * 2};
+	case 3: /* right edge */
+		return (struct rect){r->x + r->w - STRIP, r->y - STRIP, STRIP * 2,
+							 r->h + STRIP * 2};
+	default: /* dimensions pill above the top-right corner */
+		return (struct rect){r->x + r->w - PILL_W - STRIP, r->y - PILL_H - STRIP,
+							 PILL_W + STRIP, PILL_H + STRIP};
+	}
+}
+
+static struct rect rect_intersect(const struct rect *a, const struct rect *b) {
+	int32_t x0 = a->x > b->x ? a->x : b->x;
+	int32_t y0 = a->y > b->y ? a->y : b->y;
+	int32_t x1 = (a->x + a->w < b->x + b->w ? a->x + a->w : b->x + b->w);
+	int32_t y1 = (a->y + a->h < b->y + b->h ? a->y + a->h : b->y + b->h);
+	struct rect out = {x0, y0, x1 - x0, y1 - y0};
+	if (out.w < 0) out.w = 0;
+	if (out.h < 0) out.h = 0;
+	return out;
+}
+
 struct overlay_state *overlay_start(struct grabit_wl_state *s, struct rect r,
 									bool show_dimensions) {
 	if (!s || !s->layer_shell || !s->compositor) return NULL;
 
-	size_t n_overlap = 0;
+	size_t n_patches = 0;
 	for (size_t i = 0; i < s->n_outputs; i++) {
-		if (grabit_output_rect_intersect(s->outputs[i], &r, NULL, NULL, NULL, NULL)) n_overlap++;
+		if (!grabit_output_rect_intersect(s->outputs[i], &r, NULL, NULL, NULL, NULL))
+			continue;
+		n_patches += show_dimensions ? 5 : 4;
 	}
-	if (n_overlap == 0) return NULL;
+	if (n_patches == 0) return NULL;
 
 	struct overlay_state *st = calloc(1, sizeof *st);
 	if (!st) return NULL;
 	st->wls = s;
 	st->r = r;
 	st->show_dimensions = show_dimensions;
-	st->outs = calloc(n_overlap, sizeof *st->outs);
+	st->outs = calloc(n_patches, sizeof *st->outs);
 	if (!st->outs) {
 		free(st);
 		return NULL;
 	}
-	st->n = n_overlap;
 
 	size_t k = 0;
 	for (size_t i = 0; i < s->n_outputs; i++) {
-		if (!grabit_output_rect_intersect(s->outputs[i], &r, NULL, NULL, NULL, NULL)) continue;
-		struct overlay_output *o = &st->outs[k++];
-		o->st = st;
-		o->go = s->outputs[i];
+		struct grabit_output *go = s->outputs[i];
+		if (!grabit_output_rect_intersect(go, &r, NULL, NULL, NULL, NULL)) continue;
+		struct rect screen = {go->x, go->y, go->logical_width, go->logical_height};
 
-		o->surface = wl_compositor_create_surface(s->compositor);
-		o->layer_surface = grabit_wl_layer_fullscreen(
-			s, o->surface, o->go->wl_output, "grabit-overlay",
-			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE,
-			&layer_listener_g, o);
-		grabit_wl_clear_input_region(s->compositor, o->surface);
-		wl_surface_commit(o->surface);
+		for (int p = 0; p < (show_dimensions ? 5 : 4); p++) {
+			struct rect want = patch_rect(&r, p);
+			struct rect have = rect_intersect(&want, &screen);
+			if (have.w <= 0 || have.h <= 0) continue;
+
+			struct overlay_output *o = &st->outs[k++];
+			o->st = st;
+			o->go = go;
+			o->ox = have.x;
+			o->oy = have.y;
+			o->width = have.w;
+			o->height = have.h;
+
+			o->surface = wl_compositor_create_surface(s->compositor);
+			if (!o->surface) continue;
+			o->layer_surface = grabit_wl_layer_anchored(
+				s, o->surface, go->wl_output, "grabit-overlay",
+				ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT,
+				have.w, have.h, have.y - go->y, 0, 0, have.x - go->x,
+				ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE, &layer_listener_g,
+				o);
+			grabit_wl_clear_input_region(s->compositor, o->surface);
+			wl_surface_commit(o->surface);
+		}
+	}
+	st->n = k;
+	if (st->n == 0) {
+		free(st->outs);
+		free(st);
+		return NULL;
 	}
 
 	wl_display_roundtrip(s->display);

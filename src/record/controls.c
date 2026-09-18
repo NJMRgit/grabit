@@ -192,6 +192,8 @@ struct rec_controls *controls_start(struct grabit_wl_state *s, struct rect r,
 		return NULL;
 	}
 	c->have_out = true;
+	log_debug("record: control bar %dx%d at %d,%d on %s", w, h, bx, by,
+			  go->name ? go->name : "?");
 	wl_surface_commit(o->surface);
 
 	bool has_pointer = s->seat_caps & WL_SEAT_CAPABILITY_POINTER;

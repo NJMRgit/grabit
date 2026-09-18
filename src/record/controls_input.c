@@ -64,7 +64,7 @@ static void pointer_motion(void *data, struct wl_pointer *p, uint32_t time,
 
 static void press_event(struct rec_controls *c) {
 	if (!rect_contains(ctl_bar_rect(c), c->cx, c->cy)) return;
-	switch (btn_at(c->cx - c->bx, c->cy - c->by)) {
+	switch (btn_at(c->cx, c->cy)) {
 	case CB_BTN_START:
 		atomic_store(c->pause_flag, 0);
 		break;

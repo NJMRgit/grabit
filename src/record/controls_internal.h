@@ -84,8 +84,10 @@ struct rec_controls {
 	struct wl_surface *cursor_surface;
 };
 
+/* the bar surface is the bar, so this rect is in surface-local coordinates
+   (c->bx/c->by are the global position the surface is anchored at) */
 static inline struct rect ctl_bar_rect(const struct rec_controls *c) {
-	return (struct rect){c->bx, c->by, c->bw, c->bh};
+	return (struct rect){0, 0, c->bw, c->bh};
 }
 
 static inline int32_t ctl_bar_width(void) {

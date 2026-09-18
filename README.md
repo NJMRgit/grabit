@@ -6,8 +6,9 @@ works on: hyprland, sway, niri, river. kde plasma screenshots via kwin's ScreenS
 
 > **this is the [NJMRgit fork](https://github.com/NJMRgit/grabit)** — it adds `-M`/`--menu`, an
 > on-screen action bar (freeze, drag the region, then pick copy/save/OCR/translate/upload/pin/record),
-> and stops the recording border, control bar and pinned captures from drawing on full-screen layer
-> surfaces, which made kwin blur the whole screen while recording or while a pin was up. `git clone https://github.com/NJMRgit/grabit && make`
+> makes pinned captures interactive (hover for the close button, drag the body to move them, no grab
+> mode needed), and stops the recording border and control bar from drawing on full-screen layer
+> surfaces, which made kwin blur the whole screen while recording. `git clone https://github.com/NJMRgit/grabit && make`
 
 ## install
 
@@ -65,7 +66,8 @@ runtime: `ffmpeg` for `--record`, `tesseract` for `--tesseract`. see [OPTIONS.md
 - toolbar that follows the region you select (`edit.toolbar_placement`)
 - works with a touchscreen as well as a mouse
 - **`--record`** region recording with overlay and tray icon; mp4, webm, or gif ([demo](https://atums.world/u/7598183f-c502-4c4e-9c51-6f167473a8fb.mp4))
-- **`--pin`** pins captures to the desktop: stackable, draggable, hover one to reveal its close button
+- **`--pin`** pins captures to the desktop: hover one to reveal its close button, drag its body to
+  move it (the window class is `grabit` — exclude it in a compositor blur effect that blurs every window)
 - **`--tray`** persistent tray icon with every action in its menu
 - **`-M`/`--menu`** freeze first, then pick what the region you drag should do (copy, save, OCR, translate, upload, pin, record) from a dock bar
 - uploads to six built-in hosts or any sharex `.sxcu` uploader

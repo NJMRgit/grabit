@@ -7,6 +7,7 @@
 #include "cairo_util.h"
 #include "capture/capture.h"
 #include "log.h"
+#include "menu/menu_bar.h"
 #include "region/annotate.h"
 #include "region/wlr_input_state.h"
 #include "ui_theme.h"
@@ -299,6 +300,9 @@ void gren_output_redraw(struct ro_output *o) {
 
 	if (region_magnifier_active(o)) region_magnifier_render(cr, o);
 	if (region_coords_active(o)) region_coords_render(cr, o);
+
+	struct menu_bar *bar = menu_bar_current();
+	if (bar) menu_bar_render(cr, bar, o->go, (double)S);
 
 	cairo_destroy(cr);
 	cairo_surface_flush(dst);

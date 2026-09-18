@@ -6,6 +6,7 @@
 
 #include "capture/capture.h"
 #include "cursor.h"
+#include "menu/menu_bar.h"
 #include "region/annotate.h"
 #include "region/toolbar_internal.h"
 #include "region/wlr_input_state.h"
@@ -67,6 +68,10 @@ static void motion_event(struct ro_state *st, wl_fixed_t sx, wl_fixed_t sy) {
 	st->cursor_x = st->cursor_on->go->x + wl_fixed_to_int(sx);
 	st->cursor_y = st->cursor_on->go->y + wl_fixed_to_int(sy);
 	st->cursor_seen = true;
+
+	struct menu_bar *bar = menu_bar_current();
+	if (bar && menu_bar_hover(bar, st->cursor_x, st->cursor_y))
+		region_render_request_redraw_all(st);
 
 	if (st->tb_dragging) {
 		if (!st->tb_lock) st->tb_out = st->cursor_on->go;

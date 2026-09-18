@@ -18,6 +18,7 @@ enum action {
 	ACTION_PIN_RELEASE,
 	ACTION_PIN_CLOSE_ALL,
 	ACTION_TRAY,
+	ACTION_MENU,
 };
 
 struct args {

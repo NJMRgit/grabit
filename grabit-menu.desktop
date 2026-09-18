@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=grabit (menu)
+GenericName=Screenshot Tool
+Comment=Pick a capture mode and action in an on-screen menu
+Exec=@BINDIR@/grabit --menu
+Terminal=false
+Categories=Graphics;
+Keywords=screenshot;capture;record;ocr;screen;menu;
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
+X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1

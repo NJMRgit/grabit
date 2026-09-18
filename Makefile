@@ -231,6 +231,8 @@ GRABIT_SRCS := \
 	src/plugin/lock.c \
 	src/plugin/fetch.c \
 	src/plugin/state.c \
+	src/menu/menu.c \
+	src/menu/menu_bar.c \
 	src/plugin/install.c \
 	src/plugin/update.c \
 	src/plugin/cli.c \
@@ -378,6 +380,7 @@ install: $(GRABIT_BIN)
 	install -Dm755 $(GRABIT_BIN) $(DESTDIR)$(PREFIX)/bin/$(NAME)
 	install -Dm644 man/$(NAME).1 $(DESTDIR)$(MANDIR)/man1/$(NAME).1
 	sed 's|@BINDIR@|$(PREFIX)/bin|g' $(NAME).desktop | install -Dm644 /dev/stdin $(DESTDIR)$(PREFIX)/share/applications/$(NAME).desktop
+	sed 's|@BINDIR@|$(PREFIX)/bin|g' $(NAME)-menu.desktop | install -Dm644 /dev/stdin $(DESTDIR)$(PREFIX)/share/applications/$(NAME)-menu.desktop
 
 .PHONY: clean
 clean:

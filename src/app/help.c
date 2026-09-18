@@ -58,6 +58,7 @@ int gapp_print_help(void) {
 		"       grabit help <topic>\n"
 		"\n"
 		"Actions:\n"
+		"  -M, --menu          freeze, drag a region, run the action bar's pick\n"
 		"  -c, --copy          copy to clipboard\n"
 		"  -u, --upload        upload to the default service\n"
 		"  --<service>         upload to zipline|nest|fakecrime|ez|guns|pixelvault|<sxcu>\n"

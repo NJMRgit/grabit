@@ -7,6 +7,7 @@
 #include "cairo_util.h"
 #include "capture/capture.h"
 #include "log.h"
+#include "menu/menu_bar.h"
 #include "region/annotate.h"
 #include "region/wlr_input_state.h"
 #include "ui_theme.h"
@@ -135,6 +136,7 @@ static void render_hint_pill(cairo_t *cr, double S, const char *hint,
 }
 
 void gren_render_bottom_hint(cairo_t *cr, const struct ro_output *o, const char *hint) {
+	if (menu_bar_current()) return; /* the action bar owns the bottom of the screen */
 	int32_t S = o->scale;
 	cairo_text_extents_t hext;
 	hint_text_extents(cr, S, hint, &hext);

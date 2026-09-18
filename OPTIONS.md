@@ -7,6 +7,7 @@ grabit -c                     # region screenshot -> clipboard
 grabit -u                     # upload to default service
 grabit -o > path.txt          # save and print path
 grabit --record               # toggle recording (run again to stop)
+grabit --menu                 # pick the mode and action in an on-screen bar
 grabit --pin                  # pin a region screenshot to the desktop
 grabit --tesseract            # ocr a region -> clipboard
 grabit -e -c                  # annotate before copying
@@ -310,6 +311,21 @@ config keys (all optional):
 | `recording.show_dimensions` | `true` | display dimension badge on the active recording region overlay |
 | `recording.max_size_mb` | (none) | re-encode if file exceeds this (0-100000) |
 | `recording.ffmpeg` | `ffmpeg` | path to ffmpeg binary |
+
+## menu
+
+`grabit --menu` (or `-M`) freezes the screen at once and shows an action bar along the bottom, so you can drag a region immediately and decide what happens to it afterwards:
+
+```
+grabit --menu                 # drag a region, then it copies to the clipboard
+```
+
+- **actions** (click a chip, or leave the default from `default_action`): copy, save, OCR, translate, upload, pin, record
+- **annotate** chip: opens the editor on the picked region before the action runs
+- **keys**: `Enter` confirms, `Esc` cancels, `Ctrl+A` selects the whole screen; the region can be moved and resized while the bar is up
+- the bar is drawn by the region selector itself, so it never appears in the capture and stays clickable while you drag
+- `-F`/`-w`/`-L` still pick full screen, active window and last region per keybind; the bar is for the decide-after-selecting flow
+- the package ships `grabit-menu.desktop` (`Exec=grabit --menu`), so a launcher entry or a global shortcut can be pointed at it
 
 ## tray
 

@@ -6,6 +6,7 @@
 
 #include "capture/capture.h"
 #include "cursor.h"
+#include "menu/menu_bar.h"
 #include "region/annotate.h"
 #include "region/toolbar_internal.h"
 #include "region/wlr_input_state.h"
@@ -43,6 +44,14 @@ void ginp_button_event(struct ro_state *st, uint32_t time, uint32_t button,
 				ginp_region_do_confirm(st);
 		}
 		return;
+	}
+
+	if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
+		struct menu_bar *bar = menu_bar_current();
+		if (bar && menu_bar_press(bar, st->cursor_x, st->cursor_y)) {
+			region_render_request_redraw_all(st);
+			return;
+		}
 	}
 
 	if (state == WL_POINTER_BUTTON_STATE_RELEASED && st->tb_dragging) {

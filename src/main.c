@@ -18,6 +18,7 @@
 #include "clipboard/clipboard.h"
 #include "config/config.h"
 #include "log.h"
+#include "menu/menu.h"
 #include "mime.h"
 #include "notify/notify.h"
 #include "ocr/ocr.h"
@@ -77,6 +78,12 @@ static int run(const struct args *a) {
 	if (eff_a.delay_secs == 0)
 		eff_a.delay_secs = config_get_int_clamp(&cfg, "capture.delay", 0, 0, 3600);
 	a = &eff_a;
+
+	if (eff == ACTION_MENU) {
+		int mrc = gapp_run_menu(&cfg, &eff_a);
+		config_free(&cfg);
+		return mrc;
+	}
 
 	int rc;
 	switch (eff) {

@@ -101,6 +101,28 @@ and a tray icon. Sending
 to the recording process toggles pause, for compositor keybinds. See the
 recording section of OPTIONS.md for backends and pause/segment behaviour.
 .TP
+.BR \-M ", " \-\-menu
+Freeze the screen and show the action bar: a dock bar along the bottom of the
+screen in which you pick what to do with the region you are about to select
+.RB ( copy,
+save, OCR, translate, upload, pin or record), plus an annotate toggle. The
+screen freezes at once, so you can drag a region immediately; the highlighted
+action runs as soon as the selection is confirmed and grabit exits.
+.B Enter
+confirms and
+.B Esc
+cancels; the region can still be moved and resized while the bar is up, and
+.B Ctrl+A
+selects the whole screen (handy for a full-screen shot). Clicking a chip in the
+bar switches the action, and annotation opens the editor on the captured region
+before the action runs.
+Doing one thing per keybind still works (see
+.BR \-c ", " \-u ", " \-o ", " \-\-record ", " \-\-tesseract );
+the bar is for when you want to decide after the region is picked. Wire it to a
+key or a launcher entry; the package ships
+.BR grabit\-menu.desktop
+for exactly that.
+.TP
 .B \-\-pin
 Capture a region and pin it to the desktop as a click-through overlay. Pins
 stack and persist as long-lived processes.

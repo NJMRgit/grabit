@@ -7,6 +7,7 @@
 #include "config/config.h"
 #include "cursor.h"
 #include "log.h"
+#include "menu/menu_bar.h"
 #include "region/edit_persist.h"
 #include "region/toolbar_internal.h"
 #include "region/wlr_input_state.h"
@@ -233,6 +234,8 @@ int region_select(struct grabit_wl_state *s, struct config *cfg,
 		} else {
 			wl_display_cancel_read(s->display);
 		}
+		if (menu_bar_tick(menu_bar_current())) region_render_request_redraw_all(&st);
+
 		struct rect snap_prev = st.snap_cur;
 		if (region_snap_tick(&st)) {
 			region_render_request_redraw_rect(&st, snap_prev);

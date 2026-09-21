@@ -33,18 +33,33 @@ struct zwlr_layer_surface_v1;
 #define CB_TIME_W 48
 #define CB_EDGE_GAP 8
 
+/* the grab handle shown inside the region when nothing fits outside it */
+#define CB_HANDLE_W 56
+#define CB_HANDLE_H 12
+/* the bar grows out of the handle, and the handle rises from the top edge */
+#define CB_ANIM_MS 150
+#define CB_RISE_MS 240
+
 #define CB_BTN_START 0
 #define CB_BTN_PAUSE 1
 #define CB_BTN_STOP 2
 #define CB_BTN_ABORT 3
 #define CB_BTN_COUNT 4
 
+/* one layer surface. the controls are two of these, the small handle and the
+   full bar: they have separate buffers so neither is ever resized, which is
+   what kwin would otherwise answer with a pointer leave */
 struct ctl_output {
 	struct rec_controls *st;
 	struct grabit_output *go;
+	bool is_handle;
 	struct wl_surface *surface;
 	struct zwlr_layer_surface_v1 *layer;
 	struct grabit_shm_pool pool;
+	int32_t w;
+	int32_t h;
+	int32_t x;
+	int32_t y;
 	int32_t width;
 	int32_t height;
 	int32_t pixel_w;
@@ -58,13 +73,25 @@ struct ctl_output {
 
 struct rec_controls {
 	struct grabit_wl_state *wls;
-	struct ctl_output out;
-	bool have_out;
+	struct ctl_output bar;
+	struct ctl_output handle;
 
+	/* no room outside the region: the handle hangs inside it and the bar opens
+	   over it when the pointer reaches the handle */
+	bool inside;
+	bool expanded;
+	double k;	 /* 0 folded, 1 open: what the open/close animation draws */
+	double rise; /* 0 above the top edge, 1 in place: the handle's own rise */
+	double k_from;
+	double rise_from;
+	int64_t k_start_ns;
+	int64_t rise_start_ns;
 	int32_t bx;
 	int32_t by;
 	int32_t bw;
 	int32_t bh;
+	int32_t hx;
+	int32_t hy;
 
 	atomic_int *stop_flag;
 	atomic_int *pause_flag;
@@ -84,10 +111,10 @@ struct rec_controls {
 	struct wl_surface *cursor_surface;
 };
 
-/* the bar surface is the bar, so this rect is in surface-local coordinates
-   (c->bx/c->by are the global position the surface is anchored at) */
-static inline struct rect ctl_bar_rect(const struct rec_controls *c) {
-	return (struct rect){0, 0, c->bw, c->bh};
+/* the controls own their surface, so a surface rect is in surface-local
+   coordinates and c->bx/c->by are the global position it is anchored at */
+static inline struct rect ctl_surface_rect(const struct ctl_output *o) {
+	return (struct rect){0, 0, o->w, o->h};
 }
 
 static inline int32_t ctl_bar_width(void) {
@@ -95,10 +122,21 @@ static inline int32_t ctl_bar_width(void) {
 		   CB_BTN_COUNT * CB_BTN + (CB_BTN_COUNT - 1) * CB_GAP + CB_PAD;
 }
 
+static inline bool ctl_output_visible(const struct ctl_output *o) {
+	const struct rec_controls *c = o->st;
+	/* the handle is up while the bar is folded away, and the bar exists while
+	   it is shown or still animating */
+	if (o->is_handle) return c->inside && c->k <= 0.0;
+	return !c->inside || c->expanded || c->k > 0.0;
+}
+
 void ctl_btn_rect(int btn, int32_t *x, int32_t *y, int32_t *w, int32_t *h);
 
 void ctl_apply_input_region(struct ctl_output *o);
+void ctl_output_hide(struct ctl_output *o);
+void ctl_set_expanded(struct rec_controls *c, bool expanded);
 void ctl_output_redraw(struct ctl_output *o);
+void ctl_output_request_redraw(struct ctl_output *o);
 void ctl_redraw_all(struct rec_controls *c);
 
 void ctl_input_attach(struct rec_controls *c);

@@ -96,14 +96,19 @@ Toggle screen recording (run again to stop). Records a region to MP4/H.264,
 or WebM/GIF via
 .BR "grabit set recording.format webm|gif" .
 Shows a border overlay, an on-screen control bar (start, pause, stop, abort)
-and a tray icon. Sending
+and a tray icon; when the region covers the whole monitor the bar starts as a
+small handle that rises out of the top centre of the region and grows into the
+bar when pointed at, folding back into the handle afterwards.
+Sending
 .B SIGUSR1
 to the recording process toggles pause, for compositor keybinds. See the
 recording section of OPTIONS.md for backends and pause/segment behaviour.
 .TP
 .BR \-M ", " \-\-menu
 Freeze the screen and show the action bar: a dock bar along the bottom of the
-screen in which you pick what to do with the region you are about to select
+screen in which you pick what to do with the region you are about to select.
+The bar starts folded into a small grab tab on the bottom edge and opens when
+the pointer reaches the tab
 .RB ( copy,
 save, OCR, translate, upload, pin or record), plus an annotate toggle. The
 screen freezes at once, so you can drag a region immediately; the highlighted

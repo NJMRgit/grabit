@@ -5,10 +5,14 @@ screenshot, screen-recording, ocr, and uploader for wlroots wayland compositors.
 works on: hyprland, sway, niri, river. kde plasma screenshots via kwin's ScreenShot2 and records via kwin's screencast protocol; gnome is recording-only (mutter's screencast d-bus api). both go through pipewire with no portal dialog. not supported: x11.
 
 > **this is the [NJMRgit fork](https://github.com/NJMRgit/grabit)** — it adds `-M`/`--menu`, an
-> on-screen action bar (freeze, drag the region, then pick copy/save/OCR/translate/upload/pin/record),
+> on-screen action bar (freeze, drag the region, then pick copy/save/OCR/translate/upload/pin/record,
+> folded into a grab tab on the bottom edge until you point at it),
 > makes pinned captures interactive (hover for the close button, drag the body to move them, no grab
-> mode needed), and stops the recording border and control bar from drawing on full-screen layer
-> surfaces, which made kwin blur the whole screen while recording. `git clone https://github.com/NJMRgit/grabit && make`
+> mode needed), stops the recording border and control bar from drawing on full-screen layer
+> surfaces, which made kwin blur the whole screen while recording, and keeps the recording controls
+> reachable when the region covers the whole monitor by starting them as a small handle that
+> rises out of the top of the region and grows into the bar on hover (the --menu action bar folds
+> into a wider tab on the bottom edge the same way). `git clone https://github.com/NJMRgit/grabit && make`
 
 ## install
 

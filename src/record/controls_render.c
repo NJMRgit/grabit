@@ -45,10 +45,12 @@ static void glyph_play(cairo_t *cr, double cx, double cy, double s) {
 	cairo_close_path(cr);
 }
 
-static void draw_bar(cairo_t *cr, const struct rec_controls *c) {
-	grabit_ui_panel(cr, 0, 0, c->bw, c->bh, 1.0);
+/* the bar's content, drawn at the surface's origin */
+static void draw_bar_content(cairo_t *cr, const struct ctl_output *o) {
+	const struct rec_controls *c = o->st;
+	grabit_ui_panel(cr, 0, 0, o->w, o->h, 1.0);
 
-	double cy = CB_H / 2.0;
+	double cy = o->h / 2.0;
 	double dot_cx = CB_PAD + CB_DOT_W / 2.0;
 	if (c->paused) {
 		cairo_set_source_rgba(cr, 1.0, 0.55, 0.32, 1.0);
@@ -120,6 +122,64 @@ static void draw_bar(cairo_t *cr, const struct rec_controls *c) {
 	}
 }
 
+/* flat against the top edge, rounded below: a tab hanging off the region */
+static void handle_path(cairo_t *cr, double w, double h) {
+	double r = h / 2.0;
+	if (r > w / 2.0) r = w / 2.0;
+
+	cairo_new_sub_path(cr);
+	cairo_move_to(cr, 0, 0);
+	cairo_line_to(cr, w, 0);
+	cairo_line_to(cr, w, h - r);
+	cairo_arc(cr, w - r, h - r, r, 0.0, 0.5 * M_PI);
+	cairo_line_to(cr, r, h);
+	cairo_arc(cr, r, h - r, r, 0.5 * M_PI, M_PI);
+	cairo_close_path(cr);
+}
+
+/* the grab handle shown inside the region when the bar has nowhere to go */
+static void draw_handle(cairo_t *cr, const struct ctl_output *o) {
+	const struct rec_controls *c = o->st;
+	if (c->paused) {
+		cairo_set_source_rgba(cr, 0.72, 0.38, 0.22, 0.94);
+	} else {
+		cairo_set_source_rgba(cr, 0.08, 0.08, 0.08, 0.94);
+	}
+	handle_path(cr, o->w, o->h);
+	cairo_fill(cr);
+	cairo_set_source_rgba(cr, 1, 1, 1, 0.16);
+	cairo_set_line_width(cr, 1.0);
+	cairo_save(cr);
+	cairo_translate(cr, 0.5, 0.5);
+	handle_path(cr, o->w - 1.0, o->h - 1.0);
+	cairo_restore(cr);
+	cairo_stroke(cr);
+}
+
+/* the bar grows out of the handle, which sits on the same top edge */
+static void draw_bar(cairo_t *cr, const struct ctl_output *o) {
+	const struct rec_controls *c = o->st;
+	double k = c->inside ? c->k : 1.0;
+	if (k <= 0.0) return;
+	if (k >= 1.0) {
+		draw_bar_content(cr, o);
+		return;
+	}
+	double hx = (double)(c->hx - c->bx);
+	double x = hx + (0.0 - hx) * k;
+	double w = CB_HANDLE_W + ((double)o->w - CB_HANDLE_W) * k;
+	double h = CB_HANDLE_H + ((double)o->h - CB_HANDLE_H) * k;
+
+	cairo_save(cr);
+	cairo_translate(cr, x, 0.0);
+	cairo_scale(cr, w / o->w, h / o->h);
+	cairo_push_group(cr);
+	draw_bar_content(cr, o);
+	cairo_pop_group_to_source(cr);
+	cairo_paint_with_alpha(cr, k);
+	cairo_restore(cr);
+}
+
 static void frame_done(void *data, struct wl_callback *cb, uint32_t time) {
 	(void)cb;
 	(void)time;
@@ -132,7 +192,7 @@ static const struct wl_callback_listener frame_listener_g = {
 	.done = frame_done,
 };
 
-static void output_request_redraw(struct ctl_output *o) {
+void ctl_output_request_redraw(struct ctl_output *o) {
 	o->dirty = true;
 	if (o->frame_cb) return;
 	ctl_output_redraw(o);
@@ -141,6 +201,7 @@ static void output_request_redraw(struct ctl_output *o) {
 void ctl_output_redraw(struct ctl_output *o) {
 	if (!o->configured) return;
 	struct rec_controls *c = o->st;
+	if (!ctl_output_visible(o)) return;
 	o->dirty = false;
 
 	struct grabit_shm_slot *slot = grabit_shm_pool_next(
@@ -161,7 +222,13 @@ void ctl_output_redraw(struct ctl_output *o) {
 	cairo_paint(cr);
 	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 	cairo_scale(cr, o->scale, o->scale);
-	draw_bar(cr, c);
+	if (o->is_handle) {
+		/* the handle slides down out of the top edge as it appears */
+		cairo_translate(cr, 0.0, -(1.0 - c->rise) * o->h);
+		draw_handle(cr, o);
+	} else {
+		draw_bar(cr, o);
+	}
 	cairo_destroy(cr);
 	cairo_surface_flush(surf);
 	cairo_surface_destroy(surf);
@@ -173,8 +240,4 @@ void ctl_output_redraw(struct ctl_output *o) {
 	wl_surface_commit(o->surface);
 	wl_display_flush(c->wls->display);
 	o->mapped = true;
-}
-
-void ctl_redraw_all(struct rec_controls *c) {
-	if (c->have_out) output_request_redraw(&c->out);
 }

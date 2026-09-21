@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 creations
 
+#define _DEFAULT_SOURCE
 #define _XOPEN_SOURCE 700
 #include "menu/menu_bar.h"
 
@@ -14,6 +15,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include <cairo/cairo.h>
 
@@ -68,6 +70,10 @@ void menu_bar_init(struct menu_bar *mb, struct config *cfg) {
 	memset(mb, 0, sizeof *mb);
 	mb->act = MA_COPY;
 	mb->hover = -1;
+	mb->open = false;
+	mb->k = 0.0;
+	mb->rise = 0.0;
+	mb->started = false;
 	const char *name = config_get(cfg, "default_action");
 	if (name) {
 		if (strcmp(name, "upload") == 0)
@@ -109,12 +115,20 @@ void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
 	}
 
 	mb->h = MENU_BAR_H;
+	int32_t hw = mb->w / 5;
+	if (hw < MENU_HANDLE_MIN_W) hw = MENU_HANDLE_MIN_W;
+	if (hw > MENU_HANDLE_MAX_W) hw = MENU_HANDLE_MAX_W;
 	int32_t x = go->x + (go->logical_width - mb->w) / 2;
-	int32_t y = go->y + go->logical_height - MENU_BAR_H - MENU_DOCK_GAP;
+	int32_t y = go->y + go->logical_height - MENU_BAR_H;
 	if (x < go->x + MENU_EDGE_GAP) x = go->x + MENU_EDGE_GAP;
 	if (y < go->y + MENU_EDGE_GAP) y = go->y + MENU_EDGE_GAP;
 	mb->go = go;
 	mb->bar = (struct rect){x, y, mb->w, MENU_BAR_H};
+	/* the tab hangs off the bottom edge, centred under the bar: the bar opens
+	   out of it the way the recording bar opens out of its handle */
+	mb->handle = (struct rect){go->x + (go->logical_width - hw) / 2,
+							   go->y + go->logical_height - MENU_HANDLE_H, hw,
+							   MENU_HANDLE_H};
 	mb->placed = true;
 	for (int i = 0; i < mb->n; i++) {
 		struct menu_chip *c = &mb->chips[i];
@@ -124,7 +138,81 @@ void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
 	}
 }
 
+static int64_t menu_now_ns(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+static double menu_ease(double t) {
+	if (t <= 0.0) return 0.0;
+	if (t >= 1.0) return 1.0;
+	return 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t); /* ease out */
+}
+
+/* step one value towards its target; true while it still has frames to draw */
+static bool menu_step(double *value, double target, double *from, int64_t *start_ns,
+					  double duration_ms) {
+	if (*value == target && *start_ns == 0) return false;
+	double ms = (double)(menu_now_ns() - *start_ns) / 1e6;
+	if (*start_ns == 0) {
+		*from = *value;
+		*start_ns = menu_now_ns();
+		ms = 0.0;
+	}
+	if (ms >= duration_ms) {
+		*value = target;
+		*start_ns = 0;
+		return true;
+	}
+	*value = *from + (target - *from) * menu_ease(ms / duration_ms);
+	return true;
+}
+
+void menu_bar_set_open(struct menu_bar *mb, bool open) {
+	if (!mb || mb->open == open) return;
+	mb->open = open;
+}
+
+/* true while the bar or the tab still needs frames */
+bool menu_bar_tick(struct menu_bar *mb) {
+	if (!mb) return false;
+	if (!mb->started) {
+		/* the tab rises out of the bottom edge when the bar first appears */
+		mb->started = true;
+		mb->rise_from = mb->rise;
+		mb->rise_start_ns = menu_now_ns();
+	}
+	bool busy = menu_step(&mb->k, mb->open ? 1.0 : 0.0, &mb->k_from, &mb->k_start_ns,
+						  MENU_ANIM_MS);
+	/* the tab only comes back once the bar has finished folding away */
+	double rise_target = (mb->k <= 0.0 && !mb->open) ? 1.0 : 0.0;
+	if (menu_step(&mb->rise, rise_target, &mb->rise_from, &mb->rise_start_ns,
+				  MENU_RISE_MS))
+		busy = true;
+	return busy;
+}
+
+/* the tab keeps the bar open while the pointer crosses it */
+static bool menu_open_area(const struct menu_bar *mb, int32_t x, int32_t y) {
+	return rect_contains(mb->bar, x, y) || rect_contains(mb->handle, x, y);
+}
+
 bool menu_bar_hover(struct menu_bar *mb, int32_t x, int32_t y) {
+	if (!mb->placed) return false;
+	bool changed = false;
+
+	if (!mb->open) {
+		if (!rect_contains(mb->handle, x, y)) return false;
+		menu_bar_set_open(mb, true);
+		changed = true;
+	} else if (!menu_open_area(mb, x, y)) {
+		/* the pointer walked off the bar and its tab: fold it back to the tab */
+		menu_bar_set_open(mb, false);
+		mb->hover = -1;
+		return true;
+	}
+
 	int hover = -1;
 	if (rect_contains(mb->bar, x, y)) {
 		for (int i = 0; i < mb->n; i++) {
@@ -137,13 +225,22 @@ bool menu_bar_hover(struct menu_bar *mb, int32_t x, int32_t y) {
 			}
 		}
 	}
-	if (hover == mb->hover) return false;
+	if (hover == mb->hover) return changed;
 	mb->hover = hover;
 	return true;
 }
 
 bool menu_bar_press(struct menu_bar *mb, int32_t x, int32_t y) {
-	if (!rect_contains(mb->bar, x, y)) return false;
+	if (!mb->placed) return false;
+	if (!mb->open) {
+		/* touch has no hover: a tap on the tab opens the bar */
+		if (!rect_contains(mb->handle, x, y)) return false;
+		log_debug("menu: tab click at %d,%d", x, y);
+		menu_bar_set_open(mb, true);
+		return true;
+	}
+	if (!rect_contains(mb->bar, x, y))
+		return rect_contains(mb->handle, x, y); /* the tab is ours, the rest is not */
 	log_debug("menu: bar click at %d,%d", x, y);
 	for (int i = 0; i < mb->n; i++) {
 		struct rect r = mb->chips[i].r;
@@ -285,13 +382,64 @@ static void glyph_draw(cairo_t *cr, const struct menu_chip *c, double cx, double
 	}
 }
 
+/* flat against the bottom edge, rounded above: a tab hanging off the screen */
+static void menu_handle_path(cairo_t *cr, double w, double h) {
+	double r = h / 2.0;
+	if (r > w / 2.0) r = w / 2.0;
+
+	cairo_new_sub_path(cr);
+	cairo_move_to(cr, 0, h);
+	cairo_line_to(cr, 0, r);
+	cairo_arc(cr, r, r, r, M_PI, 1.5 * M_PI);
+	cairo_line_to(cr, w - r, 0);
+	cairo_arc(cr, w - r, r, r, 1.5 * M_PI, 2.0 * M_PI);
+	cairo_line_to(cr, w, h);
+	cairo_close_path(cr);
+}
+
+/* the folded tab, drawn at the origin */
+static void menu_tab_draw(cairo_t *cr, const struct menu_bar *mb) {
+	double w = mb->handle.w;
+	double h = mb->handle.h;
+	cairo_save(cr);
+	cairo_set_source_rgba(cr, 0.08, 0.08, 0.08, 0.94);
+	menu_handle_path(cr, w, h);
+	cairo_fill(cr);
+	cairo_set_source_rgba(cr, 1, 1, 1, 0.16);
+	cairo_set_line_width(cr, 1.0);
+	cairo_translate(cr, 0.5, 0.5);
+	menu_handle_path(cr, w - 1.0, h - 1.0);
+	cairo_stroke(cr);
+	cairo_restore(cr);
+}
+
 void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_output *go,
 					 double scale) {
 	(void)scale;
 	if (!mb->placed || go != mb->go) return;
 
+	double k = mb->k;
+	/* the tab rises up out of the bottom edge, and slips back through it while
+	   the bar is on screen */
+	if (mb->rise > 0.0) {
+		cairo_save(cr);
+		cairo_translate(cr, mb->handle.x - go->x,
+						mb->handle.y - go->y + (1.0 - mb->rise) * mb->handle.h);
+		menu_tab_draw(cr, mb);
+		cairo_restore(cr);
+	}
+	if (k <= 0.0) return;
+
+	/* the bar grows out of the tab: interpolate the two rects, both of which
+	   sit on the bottom edge, and fade in on the way */
+	double rx = mb->handle.x + (mb->bar.x - mb->handle.x) * k;
+	double ry = mb->handle.y + (mb->bar.y - mb->handle.y) * k;
+	double rw = mb->handle.w + (mb->bar.w - mb->handle.w) * k;
+	double rh = mb->handle.h + (mb->bar.h - mb->handle.h) * k;
 	cairo_save(cr);
-	cairo_translate(cr, mb->bar.x - go->x, mb->bar.y - go->y);
+	cairo_translate(cr, rx - go->x, ry - go->y);
+	cairo_scale(cr, rw / mb->bar.w, rh / mb->bar.h);
+	if (k < 1.0) cairo_push_group(cr);
 	grabit_ui_panel(cr, 0, 0, mb->bar.w, mb->bar.h, 1.0);
 
 	for (int i = 0; i < mb->n; i++) {
@@ -332,5 +480,9 @@ void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_outpu
 		cairo_show_text(cr, label);
 	}
 
+	if (k < 1.0) {
+		cairo_pop_group_to_source(cr);
+		cairo_paint_with_alpha(cr, k);
+	}
 	cairo_restore(cr);
 }

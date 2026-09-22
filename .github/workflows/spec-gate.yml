@@ -1,0 +1,33 @@
+# The shared dev-standard gate: tests must pass, and (once design documents
+# exist) a behaviour change must carry its spec. See ~/Projects/dev-standard.
+name: Spec gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  spec-gate:
+    runs-on: ubuntu-latest
+    container: debian:trixie-slim
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: NJMRgit/dev-standard
+          path: tools/dev-standard
+      - name: install deps
+        run: |
+          apt-get update -qq
+          apt-get install -qq -y --no-install-recommends ca-certificates git python3 build-essential pkg-config \
+            libwayland-dev libwayland-bin libcairo2-dev libxkbcommon-dev libmagic-dev \
+            libcurl4-openssl-dev libjson-c-dev libdbus-1-dev
+      - name: Spec/code coherence + tests
+        run: |
+          python3 tools/dev-standard/bin/spec-gate check \
+            --project "grabit" \
+            --range "origin/${{ github.base_ref || 'HEAD' }}..HEAD"

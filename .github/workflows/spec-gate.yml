@@ -33,6 +33,8 @@ jobs:
             libwayland-dev libwayland-bin libcairo2-dev libxkbcommon-dev libmagic-dev \
             libcurl4-openssl-dev libjson-c-dev libdbus-1-dev
       - name: Spec/code coherence + tests
+        env:
+          SPEC_GATE_REPO: ${{ github.workspace }}
         run: |
           python3 tools/dev-standard/bin/spec-gate check \
             --project "grabit" \

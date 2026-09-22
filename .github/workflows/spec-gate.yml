@@ -34,11 +34,13 @@ jobs:
             libcurl4-openssl-dev libjson-c-dev libdbus-1-dev
       - name: probe (temporary)
         run: |
-          echo "workspace=$GITHUB_WORKSPACE spec_gate_repo=$SPEC_GATE_REPO pwd=$(pwd)"
-          ls -la .git | head -3
-          git rev-parse --show-toplevel
-          git -c safe.directory='*' -C "$SPEC_GATE_REPO" rev-parse --show-toplevel
-          git -C "$SPEC_GATE_REPO" diff --name-only HEAD~1..HEAD | head -3
+          pwd
+          echo "workspace=$GITHUB_WORKSPACE"
+          ls -la | head -20
+          ls -la "$GITHUB_WORKSPACE" | head -20
+          ls -la /__w
+          find /__w -maxdepth 3 -name .git 2>/dev/null | head
+          git -C "$GITHUB_WORKSPACE" rev-parse --show-toplevel
           exit 1
       - name: Spec/code coherence + tests
         env:

@@ -25,6 +25,20 @@ jobs:
           sudo apt-get install -qq -y --no-install-recommends build-essential pkg-config clang-format \
             libwayland-dev libwayland-bin libcairo2-dev libxkbcommon-dev libmagic-dev \
             libcurl4-openssl-dev libjson-c-dev libdbus-1-dev
+      - name: libpng newer than the runner's
+        # src/capture/png_hdr.c uses png_set_cLLI/cICP/mDCV, which ubuntu 24.04's
+        # libpng (1.6.43) does not have; debian trixie, which the project's own
+        # CI uses, does. Build 1.6.50 into /usr/local instead of a container,
+        # because a container job leaves no git history for the gate to diff.
+        run: |
+          curl -fsSL -o /tmp/libpng.tar.gz https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.50.tar.gz
+          tar xzf /tmp/libpng.tar.gz -C /tmp
+          cd /tmp/libpng-1.6.50
+          ./configure --prefix=/usr/local --disable-static >/dev/null
+          make -j"$(nproc)" >/dev/null
+          sudo make install >/dev/null
+          sudo ldconfig
+          pkg-config --modversion libpng
       - name: Spec/code coherence + tests
         env:
           SPEC_GATE_REPO: ${{ github.workspace }}

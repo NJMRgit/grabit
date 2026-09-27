@@ -33,7 +33,7 @@ struct zwlr_layer_surface_v1;
 #define CB_TIME_W 48
 #define CB_EDGE_GAP 8
 
-/* the grab handle shown inside the region when nothing fits outside it */
+/* the grab handle the controls fold into while the bar is closed */
 #define CB_HANDLE_W 56
 #define CB_HANDLE_H 12
 /* the bar grows out of the handle, and the handle rises from the top edge */
@@ -76,8 +76,8 @@ struct rec_controls {
 	struct ctl_output bar;
 	struct ctl_output handle;
 
-	/* no room outside the region: the handle hangs inside it and the bar opens
-	   over it when the pointer reaches the handle */
+	/* the controls always start folded: the handle hangs from the region's top
+	   edge and the bar opens over it when the pointer reaches the handle */
 	bool inside;
 	bool expanded;
 	double k;	 /* 0 folded, 1 open: what the open/close animation draws */

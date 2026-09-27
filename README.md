@@ -9,10 +9,10 @@ works on: hyprland, sway, niri, river. kde plasma screenshots via kwin's ScreenS
 > folded into a grab tab on the bottom edge until you point at it),
 > makes pinned captures interactive (hover for the close button, drag the body to move them, no grab
 > mode needed), stops the recording border and control bar from drawing on full-screen layer
-> surfaces, which made kwin blur the whole screen while recording, and keeps the recording controls
-> reachable when the region covers the whole monitor by starting them as a small handle that
-> rises out of the top of the region and grows into the bar on hover (the --menu action bar folds
-> into a wider tab on the bottom edge the same way). `git clone https://github.com/NJMRgit/grabit && make`
+> surfaces, which made kwin blur the whole screen while recording, and always starts the recording
+> controls as a small handle that rises out of the top edge of the region and grows into the bar
+> on hover (the --menu action bar folds into a wider tab on the bottom edge the same way).
+> `git clone https://github.com/NJMRgit/grabit && make`
 
 ## install
 

@@ -81,96 +81,6 @@ static const struct zwlr_layer_surface_v1_listener layer_listener_g = {
 	.closed = layer_closed,
 };
 
-static bool try_output(const struct grabit_output *o, struct rect r,
-					   int32_t w, int32_t h, int32_t *bx, int32_t *by) {
-	int32_t x = o->x + (o->logical_width - w) / 2;
-	int32_t ys[2] = {o->y + CB_EDGE_GAP,
-					 o->y + o->logical_height - CB_EDGE_GAP - h};
-	for (int i = 0; i < 2; i++) {
-		if (!rects_overlap((struct rect){x, ys[i], w, h}, r)) {
-			*bx = x;
-			*by = ys[i];
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool try_place_near_region(const struct grabit_output *o, struct rect r,
-								  int32_t w, int32_t h, int32_t *bx, int32_t *by) {
-	int32_t x_centered = r.x + (r.w - w) / 2;
-	if (x_centered < o->x + CB_EDGE_GAP) x_centered = o->x + CB_EDGE_GAP;
-	if (x_centered + w > o->x + o->logical_width - CB_EDGE_GAP)
-		x_centered = o->x + o->logical_width - CB_EDGE_GAP - w;
-
-	int32_t space_above = r.y - o->y;
-	int32_t space_below = o->y + o->logical_height - (r.y + r.h);
-
-	if (space_below >= h + 2 * CB_EDGE_GAP) {
-		*bx = x_centered;
-		*by = r.y + r.h + CB_EDGE_GAP;
-		return true;
-	}
-	if (space_above >= h + 2 * CB_EDGE_GAP) {
-		*bx = x_centered;
-		*by = r.y - h - CB_EDGE_GAP;
-		return true;
-	}
-
-	int32_t y_centered = r.y + (r.h - h) / 2;
-	if (y_centered < o->y + CB_EDGE_GAP) y_centered = o->y + CB_EDGE_GAP;
-	if (y_centered + h > o->y + o->logical_height - CB_EDGE_GAP)
-		y_centered = o->y + o->logical_height - CB_EDGE_GAP - h;
-
-	int32_t space_left = r.x - o->x;
-	int32_t space_right = o->x + o->logical_width - (r.x + r.w);
-
-	if (space_right >= w + 2 * CB_EDGE_GAP) {
-		*bx = r.x + r.w + CB_EDGE_GAP;
-		*by = y_centered;
-		return true;
-	}
-	if (space_left >= w + 2 * CB_EDGE_GAP) {
-		*bx = r.x - w - CB_EDGE_GAP;
-		*by = y_centered;
-		return true;
-	}
-
-	return false;
-}
-
-static bool place_bar(struct grabit_wl_state *s, struct rect r,
-					  int32_t w, int32_t h, int32_t *bx, int32_t *by,
-					  struct grabit_output **out_go) {
-	const struct grabit_output *cur = grabit_wm_active_output(s);
-	if (!cur) cur = grabit_wl_output_at(s, r.x + r.w / 2, r.y + r.h / 2);
-	if (!cur) cur = grabit_wl_primary_output(s);
-	if (!cur) return false;
-
-	if (try_place_near_region(cur, r, w, h, bx, by)) {
-		*out_go = (struct grabit_output *)cur;
-		return true;
-	}
-	if (try_output(cur, r, w, h, bx, by)) {
-		*out_go = (struct grabit_output *)cur;
-		return true;
-	}
-
-	for (size_t i = 0; i < s->n_outputs; i++) {
-		const struct grabit_output *o = s->outputs[i];
-		if (o == cur) continue;
-		if (try_place_near_region(o, r, w, h, bx, by)) {
-			*out_go = (struct grabit_output *)o;
-			return true;
-		}
-		if (try_output(o, r, w, h, bx, by)) {
-			*out_go = (struct grabit_output *)o;
-			return true;
-		}
-	}
-	return false;
-}
-
 /* the output to put the controls on: the one under the region's centre, else
    the active output, else the primary */
 static const struct grabit_output *region_output(struct grabit_wl_state *s,
@@ -182,8 +92,7 @@ static const struct grabit_output *region_output(struct grabit_wl_state *s,
 	return o;
 }
 
-/* the region covers the output, so nothing fits outside it: the handle hangs
-   from the top edge of the region, clamped to the output */
+/* the handle hangs from the top edge of the region, clamped to the output */
 static bool place_inside_region(struct grabit_wl_state *s, struct rect r,
 								int32_t w, int32_t h, int32_t *bx, int32_t *by,
 								struct grabit_output **out_go) {
@@ -233,7 +142,7 @@ static void ctl_output_apply_visibility(struct ctl_output *o) {
 
 static void ctl_apply_visibility(struct rec_controls *c) {
 	if (c->bar.st) ctl_output_apply_visibility(&c->bar);
-	/* the handle only exists when the region left no room for the bar */
+	/* the handle is the bar's folded form, so it exists whenever the bar does */
 	if (c->handle.st) ctl_output_apply_visibility(&c->handle);
 }
 
@@ -311,26 +220,22 @@ struct rec_controls *controls_start(struct grabit_wl_state *s, struct rect r,
 	int32_t bx = 0, by = 0;
 	int32_t hx = 0, hy = 0;
 	struct grabit_output *go = NULL;
-	bool inside = false;
 
-	if (!place_bar(s, r, bw, CB_H, &bx, &by, &go) || !go) {
-		/* nowhere outside the region fits the bar: fall back to a grab handle
-		   hanging from the region's top edge, which opens the bar on hover */
-		inside = true;
-		if (!place_inside_region(s, r, CB_HANDLE_W, CB_HANDLE_H, &hx, &hy, &go) ||
-			!go) {
-			log_info("recording: no room for the control bar; "
-					 "re-run `grabit --record` to stop");
-			return NULL;
-		}
-		bar_geometry(go, hx, hy, bw, &bx, &by);
+	/* the controls always start folded: a handle hanging from the region's top
+	   edge, which opens the bar in place on hover (or tap) */
+	if (!place_inside_region(s, r, CB_HANDLE_W, CB_HANDLE_H, &hx, &hy, &go) ||
+		!go) {
+		log_info("recording: could not place the control handle; "
+				 "re-run `grabit --record` to stop");
+		return NULL;
 	}
+	bar_geometry(go, hx, hy, bw, &bx, &by);
 
 	struct rec_controls *c = calloc(1, sizeof *c);
 	if (!c) return NULL;
 	c->wls = s;
-	c->inside = inside;
-	c->expanded = !inside;
+	c->inside = true;
+	c->expanded = false;
 	c->bx = bx;
 	c->by = by;
 	c->bw = bw;
@@ -342,16 +247,11 @@ struct rec_controls *controls_start(struct grabit_wl_state *s, struct rect r,
 	c->abort_flag = abort_flag;
 
 	ctl_output_init(c, &c->bar, go, false, bx, by, bw, CB_H);
-	if (inside)
-		ctl_output_init(c, &c->handle, go, true, hx, hy, CB_HANDLE_W, CB_HANDLE_H);
+	ctl_output_init(c, &c->handle, go, true, hx, hy, CB_HANDLE_W, CB_HANDLE_H);
 	ctl_apply_visibility(c);
-	if (inside)
-		log_info("recording: no room outside the region; control handle %dx%d at "
-				 "%d,%d on %s (hover it for the bar)",
-				 CB_HANDLE_W, CB_HANDLE_H, hx, hy, go->name ? go->name : "?");
-	else
-		log_debug("record: control bar %dx%d at %d,%d on %s", bw, CB_H, bx, by,
-				  go->name ? go->name : "?");
+	log_info("recording: control handle %dx%d at %d,%d on %s "
+			 "(hover it for the bar)",
+			 CB_HANDLE_W, CB_HANDLE_H, hx, hy, go->name ? go->name : "?");
 
 	ctl_attach_seat(c);
 	ctl_input_attach(c);

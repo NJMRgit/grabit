@@ -6,7 +6,7 @@ id: "grabit/recording"
 description: >
   The recording pipeline, its control bar, and how a pinned capture behaves.
 status: current
-updated: "2026-09-22"
+updated: "2026-09-27"
 source_files:
   - src/record
   - src/pin
@@ -27,11 +27,12 @@ or when the source disappears; the file is finalized rather than left partial.
 
 ## The controls
 
-The controls (`record/controls*.c`) must stay reachable in the hardest case —
-a region covering the whole monitor. They therefore **start as a small handle
-that rises out of the top of the region and grows into the bar on hover**. The
-recording border and the control bar are not drawn onto full-screen layer
-surfaces, because a compositor (kwin) blurs the whole screen when they are.
+The controls (`record/controls*.c`) stay out of the way but reachable in every
+case, and always **start as a small handle that rises out of the top edge of the
+region and grows into the bar on hover**, folded back into the handle when the
+pointer leaves. The recording border and the control bar are not drawn onto
+full-screen layer surfaces, because a compositor (kwin) blurs the whole screen
+when they are.
 
 ## Pinned captures
 

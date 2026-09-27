@@ -137,7 +137,7 @@ static void handle_path(cairo_t *cr, double w, double h) {
 	cairo_close_path(cr);
 }
 
-/* the grab handle shown inside the region when the bar has nowhere to go */
+/* the handle the controls stay as while the bar is folded */
 static void draw_handle(cairo_t *cr, const struct ctl_output *o) {
 	const struct rec_controls *c = o->st;
 	if (c->paused) {

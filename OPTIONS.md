@@ -279,10 +279,10 @@ GNOME has no `zwlr_layer_shell_v1`, so the region selector, overlay and control 
 
 while recording you'll see:
 - a thin red border around the captured region
-- a control bar (start / pause / stop / abort, plus a state dot and elapsed timer) at the top of the current monitor, or the nearest spot that stays out of the recording; drag it by its background to move it, same as the editor toolbar. if the region covers the whole monitor, the bar starts as a small grab handle at the top centre of the region instead and expands when you point at it
+- a control bar (start / pause / stop / abort, plus a state dot and elapsed timer) that always starts as a small grab handle hanging from the top edge of the region, and expands when you point at it; drag it by its background to move it, same as the editor toolbar
 - a recording icon in your status bar tray (waybar with `tray` module, etc.)
 
-the pause button finishes the current encoder segment; resume (the start button) begins a new one, and stopping stitches the segments together, so paused time never appears in the output (no frozen gap). the timer counts recorded time only. when the region covers the whole monitor there is no room left outside it, so the controls move inside the region: a small grab handle at the top centre of the region, which rises out of the top edge when the recording starts. point at it (or tap it on a touchscreen) and the bar grows out of the handle; moving the pointer off the bar folds it back and the handle rises again. anything inside the region is part of the recording, so the handle is what the video shows while you are not using the bar. the tray icon and a second `grabit --record` still stop the recording as well.
+the pause button finishes the current encoder segment; resume (the start button) begins a new one, and stopping stitches the segments together, so paused time never appears in the output (no frozen gap). the timer counts recorded time only. the controls always start as a small grab handle hanging from the top edge of the region, which rises out of the top edge when the recording starts. point at it (or tap it on a touchscreen) and the bar grows out of the handle; moving the pointer off the bar folds it back and the handle rises again. the tray icon and a second `grabit --record` still stop the recording as well.
 
 pause is also scriptable: sending `SIGUSR1` to the recording process toggles it, so a compositor keybind like `pkill -USR1 -x grabit` pauses/resumes without touching the mouse.
 

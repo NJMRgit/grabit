@@ -76,8 +76,8 @@ struct rec_controls {
 	struct ctl_output bar;
 	struct ctl_output handle;
 
-	/* the controls always start folded: the handle hangs from the region's top
-	   edge and the bar opens over it when the pointer reaches the handle */
+	/* the controls always start folded: the handle hangs from the top edge of
+	   the screen and the bar opens over it when the pointer reaches the handle */
 	bool inside;
 	bool expanded;
 	double k;	 /* 0 folded, 1 open: what the open/close animation draws */

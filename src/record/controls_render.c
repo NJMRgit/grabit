@@ -122,7 +122,8 @@ static void draw_bar_content(cairo_t *cr, const struct ctl_output *o) {
 	}
 }
 
-/* flat against the top edge, rounded below: a tab hanging off the region */
+/* flat against the top edge, rounded below: a tab hanging off the top of
+   the screen */
 static void handle_path(cairo_t *cr, double w, double h) {
 	double r = h / 2.0;
 	if (r > w / 2.0) r = w / 2.0;

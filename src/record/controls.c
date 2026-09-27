@@ -92,15 +92,16 @@ static const struct grabit_output *region_output(struct grabit_wl_state *s,
 	return o;
 }
 
-/* the handle hangs from the top edge of the region, clamped to the output */
-static bool place_inside_region(struct grabit_wl_state *s, struct rect r,
-								int32_t w, int32_t h, int32_t *bx, int32_t *by,
-								struct grabit_output **out_go) {
+/* the handle hangs from the top edge of the screen, centred on the output
+   the region sits on, clamped to it */
+static bool place_at_top_edge(struct grabit_wl_state *s, struct rect r,
+							  int32_t w, int32_t h, int32_t *bx, int32_t *by,
+							  struct grabit_output **out_go) {
 	const struct grabit_output *o = region_output(s, r);
 	if (!o) return false;
 
-	int32_t x = r.x + (r.w - w) / 2;
-	int32_t y = r.y;
+	int32_t x = o->x + (o->logical_width - w) / 2;
+	int32_t y = o->y;
 	int32_t xmax = o->x + o->logical_width - CB_EDGE_GAP - w;
 	int32_t ymax = o->y + o->logical_height - CB_EDGE_GAP - h;
 	if (x > xmax) x = xmax;
@@ -221,9 +222,9 @@ struct rec_controls *controls_start(struct grabit_wl_state *s, struct rect r,
 	int32_t hx = 0, hy = 0;
 	struct grabit_output *go = NULL;
 
-	/* the controls always start folded: a handle hanging from the region's top
-	   edge, which opens the bar in place on hover (or tap) */
-	if (!place_inside_region(s, r, CB_HANDLE_W, CB_HANDLE_H, &hx, &hy, &go) ||
+	/* the controls always start folded: a handle hanging from the top edge of
+	   the screen, which opens the bar in place on hover (or tap) */
+	if (!place_at_top_edge(s, r, CB_HANDLE_W, CB_HANDLE_H, &hx, &hy, &go) ||
 		!go) {
 		log_info("recording: could not place the control handle; "
 				 "re-run `grabit --record` to stop");

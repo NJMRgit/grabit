@@ -107,7 +107,6 @@ void gregion_apply_config(struct ro_state *st, struct config *cfg, bool annotate
 	}
 }
 
-
 static void region_preferred_scale(void *data, struct wp_fractional_scale_v1 *f,
 								   uint32_t scale) {
 	(void)f;
@@ -139,7 +138,7 @@ void gregion_create_surfaces(struct ro_state *st, struct grabit_wl_state *s) {
 			o->fractional = wp_fractional_scale_manager_v1_get_fractional_scale(
 				s->fractional_scale_manager, o->surface);
 			wp_fractional_scale_v1_add_listener(o->fractional,
-											 &region_fractional_listener_g, o);
+												&region_fractional_listener_g, o);
 		}
 		o->layer_surface = grabit_wl_layer_fullscreen(
 			s, o->surface, o->go->wl_output, "grabit-region",

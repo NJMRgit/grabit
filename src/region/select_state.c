@@ -22,6 +22,9 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "cursor-shape-v1-client-protocol.h"
+#include "fractional-scale-v1-client-protocol.h"
+#include "region/render_internal.h"
+#include "viewporter-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
 void gregion_apply_config(struct ro_state *st, struct config *cfg, bool annotate_mode,
@@ -104,6 +107,23 @@ void gregion_apply_config(struct ro_state *st, struct config *cfg, bool annotate
 	}
 }
 
+
+static void region_preferred_scale(void *data, struct wp_fractional_scale_v1 *f,
+								   uint32_t scale) {
+	(void)f;
+	struct ro_output *o = data;
+	if (o->frac_scale == scale) return;
+	o->frac_scale = scale;
+	if (o->configured) {
+		gren_output_configure(o);
+		gren_output_redraw(o);
+	}
+}
+
+static const struct wp_fractional_scale_v1_listener region_fractional_listener_g = {
+	.preferred_scale = region_preferred_scale,
+};
+
 void gregion_create_surfaces(struct ro_state *st, struct grabit_wl_state *s) {
 	for (size_t i = 0; i < st->n_outs; i++) {
 		struct ro_output *o = &st->outs[i];
@@ -112,6 +132,15 @@ void gregion_create_surfaces(struct ro_state *st, struct grabit_wl_state *s) {
 		o->idx = i;
 
 		o->surface = wl_compositor_create_surface(s->compositor);
+		/* render at the output's real pixel ratio instead of an integer multiple:
+		   a 1.5 panel gets 1.5x pixels, not 2x downscaled again by the compositor */
+		if (s->viewporter && s->fractional_scale_manager) {
+			o->viewport = wp_viewporter_get_viewport(s->viewporter, o->surface);
+			o->fractional = wp_fractional_scale_manager_v1_get_fractional_scale(
+				s->fractional_scale_manager, o->surface);
+			wp_fractional_scale_v1_add_listener(o->fractional,
+											 &region_fractional_listener_g, o);
+		}
 		o->layer_surface = grabit_wl_layer_fullscreen(
 			s, o->surface, o->go->wl_output, "grabit-region",
 			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE,
@@ -164,6 +193,8 @@ void gregion_select_teardown(struct ro_state *st, struct grabit_wl_state *s) {
 	for (size_t i = 0; i < st->n_outs; i++) {
 		struct ro_output *o = &st->outs[i];
 		region_render_free_buffer(o);
+		if (o->fractional) wp_fractional_scale_v1_destroy(o->fractional);
+		if (o->viewport) wp_viewport_destroy(o->viewport);
 		if (o->layer_surface) zwlr_layer_surface_v1_destroy(o->layer_surface);
 		if (o->surface) wl_surface_destroy(o->surface);
 	}

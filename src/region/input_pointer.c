@@ -70,8 +70,13 @@ static void motion_event(struct ro_state *st, wl_fixed_t sx, wl_fixed_t sy) {
 	st->cursor_seen = true;
 
 	struct menu_bar *bar = menu_bar_current();
-	if (bar && menu_bar_hover(bar, st->cursor_x, st->cursor_y))
-		region_render_request_redraw_all(st);
+	if (bar && menu_bar_hover(bar, st->cursor_x, st->cursor_y)) {
+		struct rect mr;
+		if (menu_bar_damage_rect(bar, &mr))
+			region_render_request_redraw_rect(st, mr);
+		else
+			region_render_request_redraw_all(st);
+	}
 
 	if (st->tb_dragging) {
 		if (!st->tb_lock) st->tb_out = st->cursor_on->go;

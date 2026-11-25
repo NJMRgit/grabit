@@ -34,7 +34,7 @@ static bool button_active(const struct ro_state *st, enum tb_action act) {
 }
 
 static void paint_button_bg(cairo_t *cr, const struct ro_state *st,
-							enum tb_action act, int32_t S,
+							enum tb_action act, double S,
 							double bxi, double byi, double bwi, double bhi) {
 	bool active = button_active(st, act);
 	double pad = 3.0 * S;
@@ -61,7 +61,7 @@ static void paint_button_bg(cairo_t *cr, const struct ro_state *st,
 	cairo_fill(cr);
 }
 
-static void paint_slider(cairo_t *cr, struct ro_state *st, int32_t S,
+static void paint_slider(cairo_t *cr, struct ro_state *st, double S,
 						 double bxi, double bwi, double cyi) {
 	double pad_in = 10.0 * S;
 	double tk_x0 = bxi + pad_in;
@@ -127,7 +127,7 @@ static void paint_tool_icon(cairo_t *cr, enum tb_action act, double cxi, double 
 }
 
 void region_toolbar_render(cairo_t *cr, const struct ro_output *o) {
-	int32_t S = o->scale;
+	const double S = o->ratio;
 	int32_t tx, ty, tw, th;
 	region_toolbar_rect(o->st, NULL, &tx, &ty, &tw, &th);
 	if (!grabit_output_overlaps(o->go, (struct rect){tx, ty, tw, th})) return;

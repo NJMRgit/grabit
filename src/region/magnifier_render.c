@@ -47,7 +47,7 @@ bool region_coords_active(const struct ro_output *o) {
 }
 
 void region_coords_render(cairo_t *cr, const struct ro_output *o) {
-	const int32_t S = o->scale;
+	const double S = o->ratio;
 	const int32_t pw = o->pixel_width;
 	const int32_t ph = o->pixel_height;
 	double cx = (o->st->cursor_x - o->go->x) * S;
@@ -85,7 +85,7 @@ void region_magnifier_render(cairo_t *cr, const struct ro_output *o) {
 	const struct image *img = &o->st->frozen[o->idx];
 	if (!img->bytes || img->stride <= 0) return;
 
-	const int32_t S = o->scale;
+	const double S = o->ratio;
 	const int32_t pw = o->pixel_width;
 	const int32_t ph = o->pixel_height;
 

@@ -68,7 +68,7 @@ void region_color_picker_release_cache(struct ro_state *st) {
 	picker_patterns_destroy(st);
 }
 
-static void render_grid(cairo_t *cr, struct ro_state *st, int32_t S,
+static void render_grid(cairo_t *cr, struct ro_state *st, double S,
 						double dx, double dy, double dw, double dh) {
 	int32_t idw = (int32_t)dw, idh = (int32_t)dh;
 	if (st->picker_pat_dw != idw || st->picker_pat_dh != idh) {
@@ -105,7 +105,7 @@ static void render_grid(cairo_t *cr, struct ro_state *st, int32_t S,
 	cairo_stroke(cr);
 }
 
-static void render_input(cairo_t *cr, const struct ro_output *o, int32_t S) {
+static void render_input(cairo_t *cr, const struct ro_output *o, double S) {
 	int32_t ix, iy, iw, ih;
 	region_color_input_rect(o->st, &ix, &iy, &iw, &ih);
 	double dix = (double)(ix - o->go->x) * S;
@@ -166,7 +166,7 @@ static void render_input(cairo_t *cr, const struct ro_output *o, int32_t S) {
 	}
 }
 
-static void render_picker_btn(cairo_t *cr, const struct ro_output *o, int32_t S,
+static void render_picker_btn(cairo_t *cr, const struct ro_output *o, double S,
 							  struct rect r, bool accent, double icon_a,
 							  void (*icon)(cairo_t *, double, double, double)) {
 	if (r.w <= 0 || r.h <= 0) return;
@@ -190,7 +190,7 @@ static void render_picker_btn(cairo_t *cr, const struct ro_output *o, int32_t S,
 	icon(cr, bx + bw / 2.0, by + bh / 2.0, bh * 0.7);
 }
 
-static void render_reset_btn(cairo_t *cr, const struct ro_output *o, int32_t S) {
+static void render_reset_btn(cairo_t *cr, const struct ro_output *o, double S) {
 	struct rect r;
 	region_color_reset_rect(o->st, &r.x, &r.y, &r.w, &r.h);
 	if (r.w <= 0) return;
@@ -199,7 +199,7 @@ static void render_reset_btn(cairo_t *cr, const struct ro_output *o, int32_t S) 
 	render_picker_btn(cr, o, S, r, false, at_default ? 0.35 : 1.0, toolbar_icon_undo);
 }
 
-static void render_eyedropper_btn(cairo_t *cr, const struct ro_output *o, int32_t S) {
+static void render_eyedropper_btn(cairo_t *cr, const struct ro_output *o, double S) {
 	struct rect r;
 	region_color_eyedropper_rect(o->st, &r.x, &r.y, &r.w, &r.h);
 	render_picker_btn(cr, o, S, r, o->st->eyedropper_mode, 1.0,
@@ -213,7 +213,7 @@ void region_color_picker_render(cairo_t *cr, const struct ro_output *o) {
 	if (pw <= 0 || ph <= 0) return;
 	if (!grabit_output_overlaps(o->go, (struct rect){px, py, pw, ph})) return;
 
-	int32_t S = o->scale;
+	const double S = o->ratio;
 	double dx = (double)(px - o->go->x) * S;
 	double dy = (double)(py - o->go->y) * S;
 	double dw = (double)pw * S;

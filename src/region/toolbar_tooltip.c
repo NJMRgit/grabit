@@ -55,7 +55,7 @@ void region_toolbar_tooltip_render(cairo_t *cr, const struct ro_output *o) {
 	region_toolbar_rect(st, NULL, &tx, &ty, &tw, &th);
 	if (!grabit_output_overlaps(o->go, (struct rect){tx, ty, tw, th})) return;
 
-	int32_t S = o->scale;
+	const double S = o->ratio;
 	double bx0 = (double)(tx - o->go->x) * S;
 	double by0 = (double)(ty - o->go->y) * S;
 

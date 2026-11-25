@@ -9,6 +9,9 @@
 
 #include "region/wlr_state.h"
 
+/* how much the screen dims outside the selection */
+#define REGION_DIM_A 0.45
+
 extern const struct wl_callback_listener gren_frame_listener_g;
 void gren_anno_cache_ensure(struct ro_output *o, cairo_surface_t *dst,
 							const struct annotation *live);

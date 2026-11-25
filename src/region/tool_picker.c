@@ -131,7 +131,7 @@ enum tool_picker_kind region_tool_picker_hit(const struct ro_state *st,
 }
 
 static void picker_row(cairo_t *cr, double x0, double w, double ry,
-					   int32_t S, bool sel, const char *label) {
+					   double S, bool sel, const char *label) {
 	double rh = TP_ROW_H * S;
 	if (sel) {
 		grabit_cairo_rect_r(cr, x0 + 3.0 * S, ry + 1.0 * S, w - 6.0 * S, rh - 2.0 * S,
@@ -158,7 +158,7 @@ void region_tool_picker_render(cairo_t *cr, const struct ro_output *o) {
 	if (pw <= 0 || ph <= 0) return;
 	if (!grabit_output_overlaps(o->go, (struct rect){px, py, pw, ph})) return;
 
-	int32_t S = o->scale;
+	const double S = o->ratio;
 	double x0 = (double)(px - o->go->x) * S;
 	double y0 = (double)(py - o->go->y) * S;
 	double w = (double)pw * S;

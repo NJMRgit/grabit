@@ -91,6 +91,8 @@ void menu_bar_init(struct menu_bar *mb, struct config *cfg);
 void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go);
 void menu_bar_set_open(struct menu_bar *mb, bool open);
 bool menu_bar_tick(struct menu_bar *mb);
+/* every pixel the bar and its tab can touch: the redraw damage of a frame */
+bool menu_bar_damage_rect(const struct menu_bar *mb, struct rect *out);
 
 /* hooks used by the region selector, which draws the bar in its own overlay */
 void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_output *go,

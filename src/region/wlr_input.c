@@ -30,9 +30,9 @@ bool ginp_eyedropper_sample(struct ro_state *st, uint32_t *out_color) {
 	struct ro_output *ro = st->cursor_on;
 	const struct image *img = &st->frozen[ro->idx];
 	if (!img->bytes || img->stride <= 0) return false;
-	int32_t scale = ro->go->scale > 0 ? ro->go->scale : 1;
-	int32_t px = (st->cursor_x - ro->go->x) * scale;
-	int32_t py = (st->cursor_y - ro->go->y) * scale;
+	double scale = ro->ratio > 0.0 ? ro->ratio : 1.0;
+	int32_t px = (int32_t)((st->cursor_x - ro->go->x) * scale);
+	int32_t py = (int32_t)((st->cursor_y - ro->go->y) * scale);
 	if (px < 0 || py < 0 || px >= img->width || py >= img->height) return false;
 	const uint8_t *row = (const uint8_t *)img->bytes + (size_t)py * (size_t)img->stride;
 	uint32_t pixel = ((const uint32_t *)row)[px];

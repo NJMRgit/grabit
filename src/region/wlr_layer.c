@@ -234,7 +234,13 @@ int region_select(struct grabit_wl_state *s, struct config *cfg,
 		} else {
 			wl_display_cancel_read(s->display);
 		}
-		if (menu_bar_tick(menu_bar_current())) region_render_request_redraw_all(&st);
+		if (menu_bar_tick(menu_bar_current())) {
+			struct rect mr;
+			if (menu_bar_damage_rect(menu_bar_current(), &mr))
+				region_render_request_redraw_rect(&st, mr);
+			else
+				region_render_request_redraw_all(&st);
+		}
 
 		struct rect snap_prev = st.snap_cur;
 		if (region_snap_tick(&st)) {

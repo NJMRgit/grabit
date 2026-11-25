@@ -26,8 +26,6 @@
 
 #include "region/render_internal.h"
 
-#define REGION_DIM_A 0.45
-
 static const struct grabit_output *hint_output(const struct ro_state *st) {
 	if (!st->cursor_seen) return grabit_wl_primary_output(st->wls);
 	return grabit_wl_output_at(st->wls, st->cursor_x, st->cursor_y);
@@ -37,9 +35,38 @@ void gren_output_redraw(struct ro_output *o) {
 	if (!o->configured) return;
 	o->dirty = false;
 
-	const int32_t S = o->scale;
+	const double S = o->ratio;
 	const int32_t pw = o->pixel_width;
 	const int32_t ph = o->pixel_height;
+
+	/* only repaint what changed: an animation that moves a bar across a frozen
+	   screen should not cost a full-screen blit per frame */
+	bool full = o->damage_full || !o->damage_pending;
+	int32_t dx = 0, dy = 0, dw = pw, dh = ph;
+	if (!full) {
+		dx = (o->damage.x - o->go->x) * S;
+		dy = (o->damage.y - o->go->y) * S;
+		dw = o->damage.w * S;
+		dh = o->damage.h * S;
+		if (dx < 0) {
+			dw += dx;
+			dx = 0;
+		}
+		if (dy < 0) {
+			dh += dy;
+			dy = 0;
+		}
+		if (dx + dw > pw) dw = pw - dx;
+		if (dy + dh > ph) dh = ph - dy;
+		if (dw <= 0 || dh <= 0) {
+			o->damage_pending = false;
+			o->damage_full = false;
+			return;
+		}
+		if (dw >= pw && dh >= ph) full = true;
+	}
+	o->damage_full = false;
+	o->damage_pending = false;
 
 	struct grabit_shm_slot *slot = grabit_shm_pool_next(
 		o->st->wls->shm, "grabit-region", &o->pool, pw, ph);
@@ -50,6 +77,10 @@ void gren_output_redraw(struct ro_output *o) {
 	cairo_surface_t *dst = grabit_cairo_image_argb(slot->buf.map, pw, ph, pw * 4);
 	if (!dst) return;
 	cairo_t *cr = cairo_create(dst);
+	if (!full) {
+		cairo_rectangle(cr, dx, dy, dw, dh);
+		cairo_clip(cr);
+	}
 
 	int32_t sel_l = 0, sel_t = 0, sel_r = 0, sel_b = 0;
 	bool sel_visible = false;
@@ -74,46 +105,64 @@ void gren_output_redraw(struct ro_output *o) {
 		}
 	}
 	if (draw_any) {
-		int32_t sx = (draw_x - o->go->x) * S;
-		int32_t sy = (draw_y - o->go->y) * S;
-		int32_t sw = draw_w * S;
-		int32_t sh = draw_h * S;
+		/* round the edges, not the size: the hole then covers the same pixels
+		   the capture crops out */
+		int32_t sx = (int32_t)lround((double)(draw_x - o->go->x) * S);
+		int32_t sy = (int32_t)lround((double)(draw_y - o->go->y) * S);
+		int32_t sx1 = (int32_t)lround((double)(draw_x + draw_w - o->go->x) * S);
+		int32_t sy1 = (int32_t)lround((double)(draw_y + draw_h - o->go->y) * S);
 		sel_l = i32max(0, sx);
 		sel_t = i32max(0, sy);
-		sel_r = i32min(pw, sx + sw);
-		sel_b = i32min(ph, sy + sh);
+		sel_r = i32min(pw, sx1);
+		sel_b = i32min(ph, sy1);
 		sel_visible = (sel_r > sel_l && sel_b > sel_t);
 	}
 
 	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-	if (o->cairo_frozen_pat)
-		cairo_set_source(cr, o->cairo_frozen_pat);
-	else
-		cairo_set_source_rgba(cr, 0, 0, 0, 0);
-	cairo_paint(cr);
+	if (o->dim_cache) {
+		cairo_set_source_surface(cr, o->dim_cache, 0, 0);
+		cairo_paint(cr);
+	} else {
+		if (o->frozen_cache)
+			cairo_set_source_surface(cr, o->frozen_cache, 0, 0);
+		else if (o->cairo_frozen_pat)
+			cairo_set_source(cr, o->cairo_frozen_pat);
+		else
+			cairo_set_source_rgba(cr, 0, 0, 0, 0);
+		cairo_paint(cr);
+		cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+		cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, REGION_DIM_A);
+		cairo_paint(cr);
+	}
 
-	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-	cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, REGION_DIM_A);
 	if (sel_visible) {
 		double snap_r = (draw_is_snap && o->st->snap_radius > 0 &&
 						 !region_snap_is_fullscreen(o->st))
 							? (double)o->st->snap_radius * S
 							: 0.0;
-		cairo_rectangle(cr, 0, 0, pw, ph);
+		/* the selection is the undimmed screen: lift it back out of the cache */
+		cairo_save(cr);
 		grabit_cairo_rect_r(cr, sel_l, sel_t, sel_r - sel_l, sel_b - sel_t, snap_r);
-		cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
-		cairo_fill(cr);
-		cairo_set_fill_rule(cr, CAIRO_FILL_RULE_WINDING);
+		cairo_clip(cr);
+		cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+		if (o->frozen_cache)
+			cairo_set_source_surface(cr, o->frozen_cache, 0, 0);
+		else if (o->cairo_frozen_pat)
+			cairo_set_source(cr, o->cairo_frozen_pat);
+		else
+			cairo_set_source_rgba(cr, 0, 0, 0, 0);
+		cairo_paint(cr);
+		cairo_restore(cr);
 		if (draw_is_snap && o->st->snap_cur_alpha < 0.999) {
+			cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 			cairo_set_source_rgba(cr, 0, 0, 0,
 								  REGION_DIM_A * (1.0 - o->st->snap_cur_alpha));
 			grabit_cairo_rect_r(cr, sel_l, sel_t, sel_r - sel_l, sel_b - sel_t,
 								snap_r);
 			cairo_fill(cr);
 		}
-	} else {
-		cairo_paint(cr);
 	}
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
 	if (region_editing(o->st)) {
 		bool anno_drag = region_anno_dragging(o->st);
@@ -312,6 +361,9 @@ void gren_output_redraw(struct ro_output *o) {
 	wl_callback_add_listener(o->frame_cb, &gren_frame_listener_g, o);
 
 	grabit_shm_slot_attach(o->surface, slot);
-	wl_surface_damage_buffer(o->surface, 0, 0, pw, ph);
+	if (full)
+		wl_surface_damage_buffer(o->surface, 0, 0, pw, ph);
+	else
+		wl_surface_damage_buffer(o->surface, dx, dy, dw, dh);
 	wl_surface_commit(o->surface);
 }

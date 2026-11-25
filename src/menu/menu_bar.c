@@ -138,6 +138,18 @@ void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
 	}
 }
 
+bool menu_bar_damage_rect(const struct menu_bar *mb, struct rect *out) {
+	if (!mb || !mb->placed || !mb->go) return false;
+	int32_t x0 = i32min(mb->bar.x, mb->handle.x) - 2;
+	int32_t y0 = i32min(mb->bar.y, mb->handle.y) - 2;
+	int32_t x1 = i32max(mb->bar.x + mb->bar.w, mb->handle.x + mb->handle.w) + 2;
+	int32_t y1 = i32max(mb->bar.y + mb->bar.h, mb->handle.y + mb->handle.h) + 2;
+	struct rect go = {mb->go->x, mb->go->y, mb->go->logical_width,
+					  mb->go->logical_height};
+	*out = rect_clamp_into((struct rect){x0, y0, x1 - x0, y1 - y0}, go);
+	return out->w > 0 && out->h > 0;
+}
+
 static int64_t menu_now_ns(void) {
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -415,8 +427,11 @@ static void menu_tab_draw(cairo_t *cr, const struct menu_bar *mb) {
 
 void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_output *go,
 					 double scale) {
-	(void)scale;
 	if (!mb->placed || go != mb->go) return;
+
+	/* the bar's rects are output-logical; the surface is buffer-scale pixels */
+	cairo_save(cr);
+	cairo_scale(cr, scale, scale);
 
 	double k = mb->k;
 	/* the tab rises up out of the bottom edge, and slips back through it while
@@ -428,7 +443,10 @@ void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_outpu
 		menu_tab_draw(cr, mb);
 		cairo_restore(cr);
 	}
-	if (k <= 0.0) return;
+	if (k <= 0.0) {
+		cairo_restore(cr);
+		return;
+	}
 
 	/* the bar grows out of the tab: interpolate the two rects, both of which
 	   sit on the bottom edge, and fade in on the way */
@@ -484,5 +502,7 @@ void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_outpu
 		cairo_pop_group_to_source(cr);
 		cairo_paint_with_alpha(cr, k);
 	}
+	cairo_restore(cr);
+
 	cairo_restore(cr);
 }

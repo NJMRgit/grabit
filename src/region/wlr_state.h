@@ -33,6 +33,8 @@ struct wl_cursor_theme;
 struct wl_cursor;
 struct wp_cursor_shape_device_v1;
 struct zwlr_layer_surface_v1;
+struct wp_viewport;
+struct wp_fractional_scale_v1;
 
 struct ro_state;
 
@@ -48,13 +50,25 @@ struct ro_output {
 	int32_t height;
 	int32_t pixel_width;
 	int32_t pixel_height;
-	int32_t scale;
+	int32_t scale;   /* integer wl_output scale (cursor themes, fallback) */
+	double ratio;    /* buffer pixels per logical pixel */
+	uint32_t frac_scale; /* 120ths, the compositor's preferred scale */
+	struct wp_viewport *viewport;
+	struct wp_fractional_scale_v1 *fractional;
 	bool configured;
 
 	struct grabit_shm_pool pool;
 
 	cairo_surface_t *cairo_frozen;
 	cairo_pattern_t *cairo_frozen_pat;
+	cairo_surface_t *frozen_cache; /* the frozen image scaled to the buffer */
+	cairo_surface_t *dim_cache;    /* the same, dimmed: one blit per full frame */
+
+	/* what changed since the last commit: the redraw paints and damages only
+	   this when nothing asked for a full frame */
+	bool damage_full;
+	bool damage_pending;
+	struct rect damage;
 
 	cairo_surface_t *anno_cache;
 	size_t anno_cache_gen;

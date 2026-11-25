@@ -7,7 +7,7 @@ description: >
   How grabit picks a capture backend, how a region is selected, what the menu
   action bar does and what each action produces.
 status: current
-updated: "2026-09-22"
+updated: "2026-11-24"
 source_files:
   - src/capture
   - src/region
@@ -46,6 +46,14 @@ pin and record. The bar does not stand in the way afterwards — it folds into a
 
 `src/region/` owns the drag geometry and the freeze; `capture/freeze.*` and
 `capture/edit_file.*` hold the frozen frame the region is cut from.
+
+The overlay is composited, not recomposited: `region/render_buffer.c` scales the
+frozen frame once (and once more into a dimmed copy), and a frame paints and
+damages only the rect it recorded, so the action bar's fold-out costs the bar's
+pixels instead of the whole screen. The surfaces render at the output's real
+pixel ratio — `wp_fractional_scale_v1` and a `wp_viewport` destination, so a
+1.5-scaled panel gets a 1.5x buffer rather than a 2x one the compositor scales
+back down; compositors without those protocols keep the integer-scale path.
 
 ## Actions
 

@@ -46,7 +46,7 @@ static uint64_t spotlight_sig(const struct annotation_list *l,
 void gren_anno_cache_ensure(struct ro_output *o, cairo_surface_t *dst,
 							const struct annotation *live) {
 	const struct annotation_list *annos = o->st->out_annos;
-	int32_t S = o->scale;
+	const double S = o->ratio;
 	int32_t dragging = region_anno_dragging(o->st) ? 1 : 0;
 
 	bool samples_backdrop = false;
@@ -137,7 +137,7 @@ static void render_hint_pill(cairo_t *cr, double S, const char *hint,
 
 void gren_render_bottom_hint(cairo_t *cr, const struct ro_output *o, const char *hint) {
 	if (menu_bar_current()) return; /* the action bar owns the bottom of the screen */
-	int32_t S = o->scale;
+	const double S = o->ratio;
 	cairo_text_extents_t hext;
 	hint_text_extents(cr, S, hint, &hext);
 	double pad = 8.0 * S;
@@ -208,14 +208,30 @@ static void output_request_redraw(struct ro_output *o) {
 }
 
 void region_render_request_redraw_rect(struct ro_state *st, struct rect r) {
-	for (size_t i = 0; i < st->n_outs; i++)
-		if (grabit_output_overlaps(st->outs[i].go, r))
-			output_request_redraw(&st->outs[i]);
+	if (r.w <= 0 || r.h <= 0) return;
+	for (size_t i = 0; i < st->n_outs; i++) {
+		struct ro_output *o = &st->outs[i];
+		if (!grabit_output_overlaps(o->go, r)) continue;
+		if (o->damage_pending) {
+			int32_t x1 = i32max(o->damage.x + o->damage.w, r.x + r.w);
+			int32_t y1 = i32max(o->damage.y + o->damage.h, r.y + r.h);
+			o->damage.x = i32min(o->damage.x, r.x);
+			o->damage.y = i32min(o->damage.y, r.y);
+			o->damage.w = x1 - o->damage.x;
+			o->damage.h = y1 - o->damage.y;
+		} else {
+			o->damage = r;
+			o->damage_pending = true;
+		}
+		output_request_redraw(o);
+	}
 }
 
 void region_render_request_redraw_all(struct ro_state *st) {
-	for (size_t i = 0; i < st->n_outs; i++)
+	for (size_t i = 0; i < st->n_outs; i++) {
+		st->outs[i].damage_full = true;
 		output_request_redraw(&st->outs[i]);
+	}
 }
 
 struct ro_output *region_render_find_by_surface(struct ro_state *st, struct wl_surface *s) {

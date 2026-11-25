@@ -49,7 +49,11 @@ void ginp_button_event(struct ro_state *st, uint32_t time, uint32_t button,
 	if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
 		struct menu_bar *bar = menu_bar_current();
 		if (bar && menu_bar_press(bar, st->cursor_x, st->cursor_y)) {
-			region_render_request_redraw_all(st);
+			struct rect mr;
+			if (menu_bar_damage_rect(bar, &mr))
+				region_render_request_redraw_rect(st, mr);
+			else
+				region_render_request_redraw_all(st);
 			return;
 		}
 	}

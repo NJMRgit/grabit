@@ -127,7 +127,7 @@ int gapp_run_menu(struct config *cfg, const struct args *a) {
 		return 1;
 	}
 	const struct grabit_output *go = pick_output(&s);
-	menu_bar_place(&mb, go);
+	menu_bar_place(&mb, go, &s);
 	log_debug("menu: bar %dx%d at %d,%d on %s, action=%d", mb.w, mb.h, mb.bar.x,
 			  mb.bar.y, go && go->name ? go->name : "?", (int)mb.act);
 	grabit_wl_finish(&s);

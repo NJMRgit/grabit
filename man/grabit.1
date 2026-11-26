@@ -110,17 +110,25 @@ screen in which you pick what to do with the region you are about to select.
 The bar starts folded into a small grab tab on the bottom edge and opens when
 the pointer reaches the tab
 .RB ( copy,
-save, OCR, translate, upload, pin or record), plus an annotate toggle. The
-screen freezes at once, so you can drag a region immediately; the highlighted
-action runs as soon as the selection is confirmed and grabit exits.
+save, OCR, translate, upload, pin or record), plus an annotate toggle. Each
+monitor also gets a full-screen button on the left of the bar, and a
+.B Confirm
+checkbox on the right. The screen freezes at once, so you can drag a region
+immediately; while
+.B Confirm
+is on (the default), releasing the drag keeps the box adjustable with resize
+handles, and the highlighted action runs when the selection is confirmed. The
+checkbox also applies to
+.BR \-\-record
+region selection and saves the value to
+.IR region.confirm .
 .B Enter
 confirms and
 .B Esc
 cancels; the region can still be moved and resized while the bar is up, and
 .B Ctrl+A
-selects the whole screen (handy for a full-screen shot). Clicking a chip in the
-bar switches the action, and annotation opens the editor on the captured region
-before the action runs.
+selects the whole screen. Clicking a chip in the bar switches the action, and
+annotation opens the editor on the captured region before the action runs.
 Doing one thing per keybind still works (see
 .BR \-c ", " \-u ", " \-o ", " \-\-record ", " \-\-tesseract );
 the bar is for when you want to decide after the region is picked. Wire it to a
@@ -465,8 +473,11 @@ Include the mouse pointer in the screenshot for this run even if
 .B capture.cursor
 is
 .BR false .
-The pointer is included by default; hide it with
-.BR "grabit set capture.cursor false" .
+The pointer is hidden in screenshots by default; show it for every capture with
+.BR "grabit set capture.cursor true" .
+Recordings keep using
+.BR recording.cursor ,
+which is on by default.
 .TP
 .B \-\-chunked
 Upload to Zipline in chunks via its partial-upload API (useful behind

@@ -70,11 +70,18 @@ void menu_bar_init(struct menu_bar *mb, struct config *cfg) {
 	memset(mb, 0, sizeof *mb);
 	mb->act = MA_COPY;
 	mb->hover = -1;
+	mb->hover_monitor = -1;
+	mb->confirm = true;
+	mb->cfg = cfg;
 	mb->open = false;
 	mb->k = 0.0;
 	mb->rise = 0.0;
 	mb->started = false;
-	const char *name = config_get(cfg, "default_action");
+	if (cfg) {
+		const char *confirm = config_get(cfg, "region.confirm");
+		if (confirm) mb->confirm = strcmp(confirm, "true") == 0;
+	}
+	const char *name = cfg ? config_get(cfg, "default_action") : NULL;
 	if (name) {
 		if (strcmp(name, "upload") == 0)
 			mb->act = MA_UPLOAD;
@@ -85,34 +92,79 @@ void menu_bar_init(struct menu_bar *mb, struct config *cfg) {
 	}
 }
 
-void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
-	mb->n = 0;
-	int32_t avail = go ? go->logical_width - 2 * MENU_EDGE_GAP : 0;
-	int32_t pad = MENU_CHIP_PAD;
+static int32_t menu_chip_width(const char *label, int32_t pad, bool icon,
+							   double size) {
+	int32_t w = pad * 2 + text_width(label, size, false);
+	if (icon) w += MENU_ICON + MENU_ICON_GAP;
+	return w;
+}
 
-	for (int pass = 0; pass < 2; pass++) {
-		int32_t w = MENU_BAR_PAD * 2;
-		mb->n = 0;
-		for (int i = 0; i < MENU_CHIP_COUNT; i++) {
-			const char *label = i == MENU_OP_ANNOTATE ? "Annotate" : menu_action_name((enum menu_action)i);
-			int32_t cw = pad * 2 + MENU_ICON + MENU_ICON_GAP +
-						 text_width(label, MENU_LABEL_SIZE, false);
-			mb->chips[mb->n] = (struct menu_chip){
-				.r = {w, MENU_BAR_PAD, cw, MENU_BAR_H - MENU_BAR_PAD * 2},
-				.id = i,
-				.opt = i == MENU_OP_ANNOTATE,
-			};
-			mb->n++;
-			w += cw;
-			if (i + 1 < MENU_CHIP_COUNT) w += MENU_GAP;
-		}
-		w += MENU_BAR_PAD;
-		if (avail <= 0 || w <= avail) {
-			mb->w = w;
-			break;
-		}
-		pad = 6;
+/* Lay the monitor chips on the left, the actions in the middle and the confirm
+   checkbox on the right. Returns the width the bar needs. */
+static int32_t menu_bar_layout(struct menu_bar *mb, int32_t pad, bool monitor_labels) {
+	int32_t chip_h = MENU_BAR_H - MENU_BAR_PAD * 2;
+	int32_t x = MENU_BAR_PAD;
+
+	mb->chip_pad = pad;
+	mb->monitor_labels = monitor_labels;
+	for (int i = 0; i < mb->n_monitors; i++) {
+		struct menu_monitor *m = &mb->monitors[i];
+		int32_t cw = monitor_labels
+						 ? menu_chip_width(m->label, pad, true, MENU_LABEL_SIZE)
+						 : pad * 2 + MENU_ICON;
+		m->chip = (struct rect){x, MENU_BAR_PAD, cw, chip_h};
+		x += cw + MENU_GAP;
 	}
+	if (mb->n_monitors > 0) x += 4;
+
+	mb->n = 0;
+	for (int i = 0; i < MENU_CHIP_COUNT; i++) {
+		const char *label = i == MENU_OP_ANNOTATE ? "Annotate"
+												  : menu_action_name((enum menu_action)i);
+		int32_t cw = menu_chip_width(label, pad, true, MENU_LABEL_SIZE);
+		mb->chips[mb->n] = (struct menu_chip){
+			.r = {x, MENU_BAR_PAD, cw, chip_h},
+			.id = i,
+			.opt = i == MENU_OP_ANNOTATE,
+		};
+		mb->n++;
+		x += cw;
+		if (i + 1 < MENU_CHIP_COUNT) x += MENU_GAP;
+	}
+
+	x += 10;
+	int32_t cw = menu_chip_width("Confirm", pad, false, MENU_LABEL_SIZE) +
+				 MENU_CHECKBOX + MENU_ICON_GAP;
+	mb->confirm_chip = (struct rect){x, MENU_BAR_PAD, cw, chip_h};
+	x += cw;
+	return x + MENU_BAR_PAD;
+}
+
+void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go,
+					struct grabit_wl_state *wls) {
+	mb->n_monitors = 0;
+	if (wls) {
+		for (size_t i = 0; i < wls->n_outputs && mb->n_monitors < MENU_MONITOR_MAX; i++) {
+			const struct grabit_output *o = wls->outputs[i];
+			if (o->dead) continue;
+			struct menu_monitor *m = &mb->monitors[mb->n_monitors++];
+			grabit_output_rect(o, &m->target);
+			snprintf(m->label, sizeof m->label, "%s",
+					 o->name && o->name[0] ? o->name : "Screen");
+		}
+	}
+	if (mb->n_monitors == 1)
+		snprintf(mb->monitors[0].label, sizeof mb->monitors[0].label, "Fullscreen");
+
+	int32_t avail = go ? go->logical_width - 2 * MENU_EDGE_GAP : 0;
+	int32_t w = 0;
+	for (int pass = 0; pass < 3; pass++) {
+		int32_t pad = pass == 0 ? MENU_CHIP_PAD : 6;
+		bool labels = pass < 2;
+		w = menu_bar_layout(mb, pad, labels);
+		if (avail <= 0 || w <= avail) break;
+	}
+	mb->w = w;
 
 	mb->h = MENU_BAR_H;
 	int32_t hw = mb->w / 5;
@@ -122,7 +174,9 @@ void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
 	int32_t y = go->y + go->logical_height - MENU_BAR_H;
 	if (x < go->x + MENU_EDGE_GAP) x = go->x + MENU_EDGE_GAP;
 	if (y < go->y + MENU_EDGE_GAP) y = go->y + MENU_EDGE_GAP;
-	mb->go = go;
+	mb->go_rect = (struct rect){go->x, go->y, go->logical_width,
+								go->logical_height};
+	snprintf(mb->go_name, sizeof mb->go_name, "%s", go->name ? go->name : "");
 	mb->bar = (struct rect){x, y, mb->w, MENU_BAR_H};
 	/* the tab hangs off the bottom edge, centred under the bar: the bar opens
 	   out of it the way the recording bar opens out of its handle */
@@ -130,6 +184,12 @@ void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
 							   go->y + go->logical_height - MENU_HANDLE_H, hw,
 							   MENU_HANDLE_H};
 	mb->placed = true;
+	for (int i = 0; i < mb->n_monitors; i++) {
+		struct menu_monitor *m = &mb->monitors[i];
+		log_debug("menu: monitor chip %s at %d,%d %dx%d", m->label,
+				  mb->bar.x + m->chip.x, mb->bar.y + m->chip.y, m->chip.w,
+				  m->chip.h);
+	}
 	for (int i = 0; i < mb->n; i++) {
 		struct menu_chip *c = &mb->chips[i];
 		log_debug("menu: chip %d (%s) at %d,%d %dx%d", i,
@@ -139,14 +199,12 @@ void menu_bar_place(struct menu_bar *mb, const struct grabit_output *go) {
 }
 
 bool menu_bar_damage_rect(const struct menu_bar *mb, struct rect *out) {
-	if (!mb || !mb->placed || !mb->go) return false;
+	if (!mb || !mb->placed) return false;
 	int32_t x0 = i32min(mb->bar.x, mb->handle.x) - 2;
 	int32_t y0 = i32min(mb->bar.y, mb->handle.y) - 2;
 	int32_t x1 = i32max(mb->bar.x + mb->bar.w, mb->handle.x + mb->handle.w) + 2;
 	int32_t y1 = i32max(mb->bar.y + mb->bar.h, mb->handle.y + mb->handle.h) + 2;
-	struct rect go = {mb->go->x, mb->go->y, mb->go->logical_width,
-					  mb->go->logical_height};
-	*out = rect_clamp_into((struct rect){x0, y0, x1 - x0, y1 - y0}, go);
+	*out = rect_clamp_into((struct rect){x0, y0, x1 - x0, y1 - y0}, mb->go_rect);
 	return out->w > 0 && out->h > 0;
 }
 
@@ -210,6 +268,19 @@ static bool menu_open_area(const struct menu_bar *mb, int32_t x, int32_t y) {
 	return rect_contains(mb->bar, x, y) || rect_contains(mb->handle, x, y);
 }
 
+static void menu_hover_clear(struct menu_bar *mb) {
+	mb->hover = -1;
+	mb->hover_monitor = -1;
+	mb->hover_confirm = false;
+}
+
+static bool menu_chip_hit(const struct menu_bar *mb, struct rect local, int32_t x,
+						  int32_t y) {
+	local.x += mb->bar.x;
+	local.y += mb->bar.y;
+	return rect_contains(local, x, y);
+}
+
 bool menu_bar_hover(struct menu_bar *mb, int32_t x, int32_t y) {
 	if (!mb->placed) return false;
 	bool changed = false;
@@ -221,57 +292,99 @@ bool menu_bar_hover(struct menu_bar *mb, int32_t x, int32_t y) {
 	} else if (!menu_open_area(mb, x, y)) {
 		/* the pointer walked off the bar and its tab: fold it back to the tab */
 		menu_bar_set_open(mb, false);
-		mb->hover = -1;
+		menu_hover_clear(mb);
 		return true;
 	}
 
 	int hover = -1;
+	int hover_monitor = -1;
+	bool hover_confirm = false;
 	if (rect_contains(mb->bar, x, y)) {
 		for (int i = 0; i < mb->n; i++) {
-			struct rect r = mb->chips[i].r;
-			r.x += mb->bar.x;
-			r.y += mb->bar.y;
-			if (rect_contains(r, x, y)) {
+			if (menu_chip_hit(mb, mb->chips[i].r, x, y)) {
 				hover = i;
 				break;
 			}
 		}
+		if (hover < 0) {
+			for (int i = 0; i < mb->n_monitors; i++) {
+				if (menu_chip_hit(mb, mb->monitors[i].chip, x, y)) {
+					hover_monitor = i;
+					break;
+				}
+			}
+		}
+		if (hover < 0 && hover_monitor < 0 &&
+			menu_chip_hit(mb, mb->confirm_chip, x, y))
+			hover_confirm = true;
 	}
-	if (hover == mb->hover) return changed;
+	if (hover == mb->hover && hover_monitor == mb->hover_monitor &&
+		hover_confirm == mb->hover_confirm)
+		return changed;
 	mb->hover = hover;
+	mb->hover_monitor = hover_monitor;
+	mb->hover_confirm = hover_confirm;
 	return true;
 }
 
-bool menu_bar_press(struct menu_bar *mb, int32_t x, int32_t y) {
-	if (!mb->placed) return false;
+static void menu_confirm_store(struct menu_bar *mb) {
+	if (!mb->cfg) return;
+	const char *value = mb->confirm ? "true" : "false";
+	if (config_set(mb->cfg, "region.confirm", value) != 0) {
+		log_warn("menu: could not set region.confirm");
+		return;
+	}
+	if (config_save(mb->cfg) != 0)
+		log_warn("menu: could not save region.confirm");
+}
+
+enum menu_press menu_bar_press(struct menu_bar *mb, int32_t x, int32_t y) {
+	if (!mb->placed) return MENU_PRESS_NONE;
 	if (!mb->open) {
 		/* touch has no hover: a tap on the tab opens the bar */
-		if (!rect_contains(mb->handle, x, y)) return false;
+		if (!rect_contains(mb->handle, x, y)) return MENU_PRESS_NONE;
 		log_debug("menu: tab click at %d,%d", x, y);
 		menu_bar_set_open(mb, true);
-		return true;
+		return MENU_PRESS_HANDLED;
 	}
-	if (!rect_contains(mb->bar, x, y))
-		return rect_contains(mb->handle, x, y); /* the tab is ours, the rest is not */
+	if (!rect_contains(mb->bar, x, y)) {
+		/* the tab is ours, the rest is not */
+		return rect_contains(mb->handle, x, y) ? MENU_PRESS_HANDLED
+											   : MENU_PRESS_NONE;
+	}
 	log_debug("menu: bar click at %d,%d", x, y);
+
+	for (int i = 0; i < mb->n_monitors; i++) {
+		if (!menu_chip_hit(mb, mb->monitors[i].chip, x, y)) continue;
+		mb->pending_fs = mb->monitors[i].target;
+		log_debug("menu: fullscreen chip %s at %d,%d %dx%d", mb->monitors[i].label,
+				  mb->pending_fs.x, mb->pending_fs.y, mb->pending_fs.w,
+				  mb->pending_fs.h);
+		return MENU_PRESS_FULLSCREEN;
+	}
+
 	for (int i = 0; i < mb->n; i++) {
-		struct rect r = mb->chips[i].r;
-		r.x += mb->bar.x;
-		r.y += mb->bar.y;
-		if (!rect_contains(r, x, y)) continue;
+		if (!menu_chip_hit(mb, mb->chips[i].r, x, y)) continue;
 		struct menu_chip *c = &mb->chips[i];
 		log_debug("menu: bar chip %d (%s) %s", i,
 				  c->opt ? "Annotate" : menu_action_name((enum menu_action)c->id),
 				  c->opt ? "toggled" : "selected");
-		if (c->opt)
+		if (c->opt) {
 			mb->annotate = !mb->annotate;
-		else {
-			mb->act = (enum menu_action)c->id;
-			if (!menu_action_uses_edit(mb->act)) mb->annotate = false;
+			return MENU_PRESS_HANDLED;
 		}
-		return true;
+		mb->act = (enum menu_action)c->id;
+		if (!menu_action_uses_edit(mb->act)) mb->annotate = false;
+		return MENU_PRESS_ACTION;
 	}
-	return true; /* click on the bar, but between chips: swallow it */
+
+	if (menu_chip_hit(mb, mb->confirm_chip, x, y)) {
+		mb->confirm = !mb->confirm;
+		log_debug("menu: confirm checkbox %s", mb->confirm ? "on" : "off");
+		menu_confirm_store(mb);
+		return MENU_PRESS_CONFIRM;
+	}
+	return MENU_PRESS_HANDLED; /* click on the bar, but between chips: swallow it */
 }
 
 /* ---- glyphs (drawn centred on cx,cy, s is roughly half the box size) ---- */
@@ -363,6 +476,37 @@ static void glyph_pen(cairo_t *cr, double cx, double cy, double s) {
 	cairo_fill(cr);
 }
 
+static void glyph_monitor(cairo_t *cr, double cx, double cy, double s) {
+	cairo_set_line_width(cr, 1.6);
+	grabit_cairo_rect_r(cr, cx - s, cy - s * 0.78, s * 2.0, s * 1.4, 1.8);
+	cairo_stroke(cr);
+	cairo_move_to(cr, cx, cy + s * 0.62);
+	cairo_line_to(cr, cx, cy + s * 0.92);
+	cairo_stroke(cr);
+	cairo_move_to(cr, cx - s * 0.45, cy + s * 0.92);
+	cairo_line_to(cr, cx + s * 0.45, cy + s * 0.92);
+	cairo_stroke(cr);
+}
+
+static void glyph_checkbox(cairo_t *cr, double cx, double cy, double s, bool on) {
+	double half = MENU_CHECKBOX / 2.0;
+	if (on) {
+		cairo_set_source_rgba(cr, 0.20, 0.45, 0.85, 1.0);
+		grabit_cairo_rect_r(cr, cx - half, cy - half, half * 2, half * 2, 3.0);
+		cairo_fill(cr);
+		cairo_set_source_rgba(cr, 1, 1, 1, 0.95);
+		cairo_set_line_width(cr, 2.0);
+		cairo_move_to(cr, cx - s * 0.5, cy);
+		cairo_line_to(cr, cx - s * 0.1, cy + s * 0.4);
+		cairo_line_to(cr, cx + s * 0.55, cy - s * 0.45);
+		cairo_stroke(cr);
+		return;
+	}
+	cairo_set_line_width(cr, 1.6);
+	grabit_cairo_rect_r(cr, cx - half, cy - half, half * 2, half * 2, 3.0);
+	cairo_stroke(cr);
+}
+
 static void glyph_draw(cairo_t *cr, const struct menu_chip *c, double cx, double cy,
 					   double s, double alpha) {
 	cairo_set_source_rgba(cr, 1, 1, 1, alpha);
@@ -425,9 +569,44 @@ static void menu_tab_draw(cairo_t *cr, const struct menu_bar *mb) {
 	cairo_restore(cr);
 }
 
+static void menu_paint_chip(cairo_t *cr, struct rect r, bool active, bool hovered) {
+	double radius = grabit_ui_radius(GUI_R_BTN);
+	if (active)
+		cairo_set_source_rgba(cr, 0.20, 0.45, 0.85, hovered ? 0.95 : 0.8);
+	else if (hovered)
+		cairo_set_source_rgba(cr, 1, 1, 1, 0.16);
+	else
+		cairo_set_source_rgba(cr, 1, 1, 1, 0.06);
+	grabit_cairo_rect_r(cr, r.x, r.y, r.w, r.h, radius);
+	cairo_fill(cr);
+
+	if (!hovered) return;
+	cairo_set_source_rgba(cr, 1, 1, 1, 0.75);
+	cairo_set_line_width(cr, 1.4);
+	grabit_cairo_rect_r_inset(cr, r.x, r.y, r.w, r.h, radius, 0.7);
+	cairo_stroke(cr);
+}
+
+static void menu_draw_label(cairo_t *cr, const char *label, double x, double cy,
+							bool bold, double alpha) {
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
+						   bold ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
+	cairo_set_font_size(cr, MENU_LABEL_SIZE);
+	cairo_set_source_rgba(cr, 1, 1, 1, alpha);
+	cairo_move_to(cr, x, cy + 4.0);
+	cairo_show_text(cr, label);
+}
+
 void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_output *go,
 					 double scale) {
-	if (!mb->placed || go != mb->go) return;
+	if (!mb->placed) return;
+	if (mb->go_name[0]) {
+		if (!go->name || strcmp(mb->go_name, go->name) != 0) return;
+	} else if (go->x != mb->go_rect.x || go->y != mb->go_rect.y ||
+			   go->logical_width != mb->go_rect.w ||
+			   go->logical_height != mb->go_rect.h) {
+		return;
+	}
 
 	/* the bar's rects are output-logical; the surface is buffer-scale pixels */
 	cairo_save(cr);
@@ -460,43 +639,48 @@ void menu_bar_render(cairo_t *cr, struct menu_bar *mb, const struct grabit_outpu
 	if (k < 1.0) cairo_push_group(cr);
 	grabit_ui_panel(cr, 0, 0, mb->bar.w, mb->bar.h, 1.0);
 
+	int32_t pad = mb->chip_pad;
+
+	for (int i = 0; i < mb->n_monitors; i++) {
+		const struct menu_monitor *m = &mb->monitors[i];
+		bool hovered = mb->hover_monitor == i;
+		menu_paint_chip(cr, m->chip, false, hovered);
+
+		double cy = m->chip.y + m->chip.h / 2.0;
+		double icon_cx = m->chip.x + pad + MENU_ICON / 2.0;
+		cairo_set_source_rgba(cr, 1, 1, 1, 0.9);
+		glyph_monitor(cr, icon_cx, cy, MENU_ICON / 2.0 - 1.0);
+		if (mb->monitor_labels)
+			menu_draw_label(cr, m->label,
+							m->chip.x + pad + MENU_ICON + MENU_ICON_GAP, cy, false,
+							0.85);
+	}
+
 	for (int i = 0; i < mb->n; i++) {
 		const struct menu_chip *c = &mb->chips[i];
 		bool selected = c->opt ? mb->annotate : (int)mb->act == c->id;
 		bool hovered = mb->hover == i;
-		double radius = grabit_ui_radius(GUI_R_BTN);
-
-		if (selected)
-			cairo_set_source_rgba(cr, 0.20, 0.45, 0.85, hovered ? 0.95 : 0.8);
-		else if (hovered)
-			cairo_set_source_rgba(cr, 1, 1, 1, 0.16);
-		else
-			cairo_set_source_rgba(cr, 1, 1, 1, 0.06);
-		grabit_cairo_rect_r(cr, c->r.x, c->r.y, c->r.w, c->r.h, radius);
-		cairo_fill(cr);
-
-		if (hovered) {
-			cairo_set_source_rgba(cr, 1, 1, 1, 0.75);
-			cairo_set_line_width(cr, 1.4);
-			grabit_cairo_rect_r_inset(cr, c->r.x, c->r.y, c->r.w, c->r.h, radius,
-									  0.7);
-			cairo_stroke(cr);
-		}
+		menu_paint_chip(cr, c->r, selected, hovered);
 
 		double cy = c->r.y + c->r.h / 2.0;
-		double icon_cx = c->r.x + MENU_CHIP_PAD + MENU_ICON / 2.0;
+		double icon_cx = c->r.x + pad + MENU_ICON / 2.0;
 		glyph_draw(cr, c, icon_cx, cy, MENU_ICON / 2.0 - 1.0, selected ? 1.0 : 0.9);
 
-		const char *label = c->opt ? "Annotate" : menu_action_name((enum menu_action)c->id);
-		cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
-							   selected ? CAIRO_FONT_WEIGHT_BOLD
-										: CAIRO_FONT_WEIGHT_NORMAL);
-		cairo_set_font_size(cr, MENU_LABEL_SIZE);
-		cairo_set_source_rgba(cr, 1, 1, 1, selected ? 1.0 : 0.85);
-		cairo_move_to(cr, c->r.x + MENU_CHIP_PAD + MENU_ICON + MENU_ICON_GAP,
-					  cy + 4.0);
-		cairo_show_text(cr, label);
+		const char *label =
+			c->opt ? "Annotate" : menu_action_name((enum menu_action)c->id);
+		menu_draw_label(cr, label, c->r.x + pad + MENU_ICON + MENU_ICON_GAP, cy,
+						selected, selected ? 1.0 : 0.85);
 	}
+
+	bool hovered = mb->hover_confirm;
+	menu_paint_chip(cr, mb->confirm_chip, mb->confirm, hovered);
+	double cy = mb->confirm_chip.y + mb->confirm_chip.h / 2.0;
+	double box_cx = mb->confirm_chip.x + pad + MENU_CHECKBOX / 2.0;
+	cairo_set_source_rgba(cr, 1, 1, 1, 0.9);
+	glyph_checkbox(cr, box_cx, cy, MENU_CHECKBOX / 2.0 - 1.0, mb->confirm);
+	menu_draw_label(cr, "Confirm",
+					mb->confirm_chip.x + pad + MENU_CHECKBOX + MENU_ICON_GAP, cy,
+					mb->confirm, 0.9);
 
 	if (k < 1.0) {
 		cairo_pop_group_to_source(cr);

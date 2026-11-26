@@ -183,7 +183,7 @@ auth lives inside the `.sxcu` `Headers` block - no separate `services.<name>.aut
 | `capture.backend` | `auto` | `auto` picks `wlr` (wlroots/hyprland/sway/niri/river), then `ext`, then `kwin` (KDE Plasma, via the `org.kde.KWin.ScreenShot2` dbus service). Force one with `wlr`, `ext`, or `kwin`. |
 | `capture.hdr` | `false` | keep the full range of an hdr output instead of tone mapping it. off by default: grabit converts pq or hlg to srgb so a capture looks the way the screen does, and most viewers cannot read a 16-bit png anyway. set `true` and a plain `-F`/`-w`/`-L` png keeps 10 bits, written as a 16-bit file carrying `cICP`, `mDCV` and `cLLI`. it does not apply to an interactive region drag, to `-e`, a preview, a rounded window, jpeg or webp, or a capture spanning two monitors, all of which are tone mapped instead. the files are roughly 2.5x larger. needs the compositor to report its colorimetry over `color-management-v1` |
 | `capture.delay` | `0` | seconds to wait before capturing, so you can open a menu or tooltip first (`--delay <secs>` overrides per run, max 3600). for screenshots the wait happens before the screen is frozen, so whatever you open during it is captured; for `--record` it happens after the region is picked, right before recording starts |
-| `capture.cursor` | `true` | include the mouse pointer in screenshots; set `false` to hide it (recordings use `recording.cursor`) |
+| `capture.cursor` | `false` | include the mouse pointer in screenshots; set `true` to show it (recordings use `recording.cursor`, which is still on by default) |
 
 ### region selector
 
@@ -193,7 +193,7 @@ auth lives inside the `.sxcu` `Headers` block - no separate `services.<name>.aut
 | `region.window_radius` | `auto` | round the corners of window captures to match the compositor. `auto` reads hyprland's `decoration:rounding` (and stays square for fullscreen windows); `0`..`100` forces a radius. applies to `-w`/`--window` and to click-to-snap selections, never to a manual drag. png and webp keep the corners transparent; jpeg cannot store alpha so it is left square with a warning; recordings get black corners |
 | `region.snap_animation` | `false` | animate the window-snap highlight: it slides and resizes between windows and fades out when the cursor leaves them, instead of jumping. needs `region.window_snap` |
 | `region.show_coords` | `false` | draw a live readout of the cursor position while selecting |
-| `region.confirm` | `false` | keep the selection adjustable after releasing the drag: resize with the handles or Shift+arrows, move by dragging inside or with the arrow keys (hold to accelerate), drag outside to start over, then press Enter, Ctrl+C, or double-click inside it to capture; Esc cancels |
+| `region.confirm` | `true` | keep the selection adjustable after releasing the drag: resize with the handles or Shift+arrows, move by dragging inside or with the arrow keys (hold to accelerate), drag outside to start over, then press Enter, Ctrl+C, or double-click inside it to capture; Esc cancels. the `Confirm` checkbox at the right of the `--menu` dock toggles this live and saves it back to the config |
 | `region.repeat_last` | `false` | reuse the last captured region instead of opening the selector, same as passing `-L`/`--last`. applies to screenshots and `--record`. with `-e` the region is applied and locked, so the editor opens on the last tool instead of in region-select mode. `-F` still wins, and `--no-last` forces the selector for one run |
 | `region.last` | | the last captured region as `<x>,<y>,<w>,<h>`; written automatically after each region capture or recording (state, not config) |
 
@@ -317,10 +317,12 @@ config keys (all optional):
 `grabit --menu` (or `-M`) freezes the screen at once and shows an action bar along the bottom, so you can drag a region immediately and decide what happens to it afterwards. the bar starts folded into a small grab tab on the bottom edge of the screen, the way the recording controls fold into a tab on the top edge: the tab rises out of the bottom edge when grabit opens, the bar grows out of it when you point at (or tap) the tab, and it folds back into the tab, which rises again, when the pointer walks off the bar and its tab.
 
 ```
-grabit --menu                 # drag a region, then it copies to the clipboard
+grabit --menu                 # drag a region, adjust it, then pick an action
 ```
 
 - **actions** (click a chip, or leave the default from `default_action`): copy, save, OCR, translate, upload, pin, record
+- **full screen** chips on the left: each monitor gets its own button, which captures that whole monitor with the selected action and closes the dock
+- **confirm** checkbox on the right: when it is on (the default), releasing a region drag keeps the box adjustable with handles; press `Enter` or click an action chip to capture. It also controls recording selected with `--record`. the checkbox saves the value to `region.confirm`
 - **annotate** chip: opens the editor on the picked region before the action runs
 - **keys**: `Enter` confirms, `Esc` cancels, `Ctrl+A` selects the whole screen; the region can be moved and resized while the bar is up
 - the bar is drawn by the region selector itself, so it never appears in the capture and stays clickable while you drag
@@ -490,7 +492,7 @@ monitor selection:
 
 an unknown number or name prints the available monitors and exits.
 
-the mouse pointer is included in screenshots by default (`capture.cursor`, default `true`); `--cursor` forces it on for one run even when the config disables it. recordings have their own `recording.cursor`.
+screenshots hide the mouse pointer by default (`capture.cursor`, default `false`); `--cursor` forces it on for one run. recordings have their own `recording.cursor`, which stays on by default.
 
 with `-e`/`--edit`, once a monitor is chosen it opens as the locked region with the annotation toolbar (no drag step). with `--record`, the chosen monitor becomes the recording region.
 

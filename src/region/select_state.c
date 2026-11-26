@@ -31,6 +31,7 @@ void gregion_apply_config(struct ro_state *st, struct config *cfg, bool annotate
 						  struct grabit_wl_state *s, const struct rect *snap_rects,
 						  size_t n_snap_rects) {
 	bool snap_enabled = true;
+	st->confirm_mode = true;
 	edit_swatches_default(st->swatches);
 	if (cfg) {
 		const char *v = config_get(cfg, "region.window_snap");
@@ -42,7 +43,7 @@ void gregion_apply_config(struct ro_state *st, struct config *cfg, bool annotate
 		if (st->snap_anim && !snap_enabled)
 			log_warn("region.snap_animation needs region.window_snap; ignoring it");
 		v = config_get(cfg, "region.confirm");
-		if (v && strcmp(v, "true") == 0) st->confirm_mode = true;
+		st->confirm_mode = !v || strcmp(v, "true") == 0;
 		v = config_get(cfg, "edit.multi_select");
 		st->multi_select_mods = v ? gkb_mod_from_name(v) : 0;
 		if (!st->multi_select_mods) st->multi_select_mods = KB_MOD_CTRL;

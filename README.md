@@ -57,7 +57,7 @@ runtime: `ffmpeg` for `--record`, `tesseract` for `--tesseract`. see [OPTIONS.md
 </p>
 
 - region selector with live freeze; drag, or click a window to snap
-- confirm mode: adjust the selection before capturing
+- confirm mode (on by default): adjust the selection with resize handles before capturing; toggle it in the `--menu` dock
 - **`-F`/`--fullscreen`** grabs one monitor, or every monitor stitched together
 - hdr outputs are tone mapped to srgb so captures look right; `capture.hdr` keeps the full range as a 16-bit png instead
 - **`-w`/`--window`** grabs the active window (hyprland and sway, and niri via its own window screenshot)
@@ -73,7 +73,7 @@ runtime: `ffmpeg` for `--record`, `tesseract` for `--tesseract`. see [OPTIONS.md
 - **`--pin`** pins captures to the desktop: hover one to reveal its close button, drag its body to
   move it (the window class is `grabit` — exclude it in a compositor blur effect that blurs every window)
 - **`--tray`** persistent tray icon with every action in its menu
-- **`-M`/`--menu`** freeze first, then pick what the region you drag should do (copy, save, OCR, translate, upload, pin, record) from a dock bar
+- **`-M`/`--menu`** freeze first, then pick what the region you drag should do (copy, save, OCR, translate, upload, pin, record) from a dock bar; full-screen buttons for every monitor sit on its left and a confirm checkbox on its right
 - uploads to six built-in hosts or any sharex `.sxcu` uploader
 - **`--tesseract --translate`** OCRs a region and copies the translation
 

@@ -80,6 +80,9 @@ int region_select(struct grabit_wl_state *s, struct config *cfg,
 	st.snap_hover = -1;
 	region_keymap_init(&st.keys, cfg);
 	gregion_apply_config(&st, cfg, annotate_mode, s, snap_rects, n_snap_rects);
+	/* the dock's checkbox is live: it overrides the config while -M runs */
+	struct menu_bar *bar = menu_bar_current();
+	if (bar) st.confirm_mode = bar->confirm;
 
 	st.xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	if (!st.xkb_ctx) {
@@ -95,9 +98,7 @@ int region_select(struct grabit_wl_state *s, struct config *cfg,
 	st.tooltip_timer_fd = annotate_mode
 							  ? timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK)
 							  : -1;
-	st.nudge_timer_fd = (annotate_mode || st.confirm_mode)
-							? timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK)
-							: -1;
+	st.nudge_timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
 
 	gregion_seat_acquire(&st, s);
 

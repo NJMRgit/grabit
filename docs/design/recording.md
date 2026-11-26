@@ -6,7 +6,7 @@ id: "grabit/recording"
 description: >
   The recording pipeline, its control bar, and how a pinned capture behaves.
 status: current
-updated: "2026-09-27"
+updated: "2026-11-25"
 source_files:
   - src/record
   - src/pin
@@ -24,6 +24,12 @@ tags: [spec, grabit, recording, pin]
 encoder process (its arguments and its exit status), and `record/compose.c`
 composes the frames. A recording ends when the user stops it from the controls
 or when the source disappears; the file is finalized rather than left partial.
+
+A region recording picks its area through the same selector as a screenshot.
+With `region.confirm` on (the default) the box stays adjustable with resize
+handles after the drag, and recording starts only when the user confirms with
+`Enter`, `Ctrl+C` or a click; the `--menu` dock's Confirm checkbox toggles the
+same setting.
 
 ## The controls
 

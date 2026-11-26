@@ -97,7 +97,7 @@ int cfg_help_example_for_key(const char *key, const char **example_out, const ch
 	}
 	if (strcmp(key, "capture.cursor") == 0) {
 		*example_out = "true|false";
-		*def_out = "true";
+		*def_out = "false";
 		return 0;
 	}
 	if (strcmp(key, "gui.radius") == 0) {
@@ -122,7 +122,7 @@ int cfg_help_example_for_key(const char *key, const char **example_out, const ch
 	}
 	if (strcmp(key, "region.confirm") == 0) {
 		*example_out = "true|false";
-		*def_out = "false";
+		*def_out = "true";
 		return 0;
 	}
 	if (strcmp(key, "region.show_coords") == 0) {

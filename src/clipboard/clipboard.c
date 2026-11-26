@@ -46,8 +46,11 @@ int clipboard_set_image_file(const char *path) {
 
 	char *mime = mime_for_file(path);
 	const char *img_mime = (mime && mime_is_image(mime)) ? mime : "image/png";
-	const char *mimes[] = {img_mime};
-	int rc = clipboard_send_bytes(buf, sz, mimes, 1);
+	/* KDE's Klipper drops image-only clipboard entries unless this marker is
+	   present, even when it is explicitly asked to keep images. Spectacle uses
+	   the same hint for its explicit image copies. */
+	const char *mimes[] = {img_mime, "x-kde-force-image-copy"};
+	int rc = clipboard_send_bytes(buf, sz, mimes, 2);
 
 	free(mime);
 	free(buf);

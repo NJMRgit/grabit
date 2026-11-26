@@ -269,7 +269,7 @@ char *gapp_capture_to_file(const struct args *a, struct config *cfg,
 	if (*is_temp) register_tmpfile(path);
 
 	const char *cursor_cfg = config_get(cfg, "capture.cursor");
-	bool cursor = a->cursor || !cursor_cfg || strcmp(cursor_cfg, "false") != 0;
+	bool cursor = a->cursor || (cursor_cfg && strcmp(cursor_cfg, "true") == 0);
 	grabit_sleep_secs(a->delay_secs);
 
 	if (plan == REGION_PLAN_NO_WINDOW) {

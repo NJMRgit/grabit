@@ -48,13 +48,34 @@ void ginp_button_event(struct ro_state *st, uint32_t time, uint32_t button,
 
 	if (button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED) {
 		struct menu_bar *bar = menu_bar_current();
-		if (bar && menu_bar_press(bar, st->cursor_x, st->cursor_y)) {
-			struct rect mr;
-			if (menu_bar_damage_rect(bar, &mr))
-				region_render_request_redraw_rect(st, mr);
-			else
-				region_render_request_redraw_all(st);
-			return;
+		if (bar) {
+			enum menu_press press = menu_bar_press(bar, st->cursor_x, st->cursor_y);
+			if (press != MENU_PRESS_NONE) {
+				if (press == MENU_PRESS_FULLSCREEN) {
+					st->sel_x = bar->pending_fs.x;
+					st->sel_y = bar->pending_fs.y;
+					st->sel_w = bar->pending_fs.w;
+					st->sel_h = bar->pending_fs.h;
+					st->has_selection = true;
+					st->dragging = false;
+					st->region_locked = true;
+					st->last_inside_press = 0;
+					region_snap_set_hover(st, -1);
+					st->finished = true;
+				} else {
+					/* the checkbox decides whether a new drag stays adjustable */
+					st->confirm_mode = bar->confirm;
+					if (press == MENU_PRESS_ACTION && st->has_selection &&
+						!region_drag_active(st))
+						st->finished = true;
+				}
+				struct rect mr;
+				if (menu_bar_damage_rect(bar, &mr))
+					region_render_request_redraw_rect(st, mr);
+				else
+					region_render_request_redraw_all(st);
+				return;
+			}
 		}
 	}
 
